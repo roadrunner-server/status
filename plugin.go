@@ -156,7 +156,7 @@ func (c *Plugin) healthHandler(ctx *fiber.Ctx) error {
 	// iterate over all provided plugins
 	for i := 0; i < len(plugins.Plugins); i++ {
 		// check if the plugin exists
-		if plugin, ok := c.statusRegistry[plugins.Plugins[i]]; ok {
+		if plugin, ok := c.statusRegistry[plugins.Plugins[i]]; ok { //nolint:nestif
 			st, errS := plugin.Status()
 			if errS != nil {
 				return errS
@@ -201,7 +201,7 @@ func (c *Plugin) readinessHandler(ctx *fiber.Ctx) error {
 	// iterate over all provided plugins
 	for i := 0; i < len(plugins.Plugins); i++ {
 		// check if the plugin exists
-		if plugin, ok := c.readyRegistry[plugins.Plugins[i]]; ok {
+		if plugin, ok := c.readyRegistry[plugins.Plugins[i]]; ok { //nolint:nestif
 			st, errS := plugin.Ready()
 			if errS != nil {
 				return errS
