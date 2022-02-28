@@ -3,7 +3,7 @@ module github.com/roadrunner-server/status/v2
 go 1.17
 
 require (
-	github.com/gofiber/fiber/v2 v2.27.0
+	github.com/gofiber/fiber/v2 v2.28.0
 	github.com/roadrunner-server/api/v2 v2.10.0
 	github.com/roadrunner-server/endure v1.2.1
 	github.com/roadrunner-server/errors v1.1.1
