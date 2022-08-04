@@ -116,8 +116,8 @@ func (c *Plugin) CollectReadinessImpls(name endure.Named, r status.Readiness) er
 }
 
 // Collects declares services to be collected.
-func (c *Plugin) Collects() []interface{} {
-	return []interface{}{
+func (c *Plugin) Collects() []any {
+	return []any{
 		c.CollectReadinessImpls,
 		c.CollectCheckerImpls,
 	}
@@ -129,7 +129,7 @@ func (c *Plugin) Name() string {
 }
 
 // RPC returns associated rpc service.
-func (c *Plugin) RPC() interface{} {
+func (c *Plugin) RPC() any {
 	return &rpc{srv: c, log: c.log}
 }
 
