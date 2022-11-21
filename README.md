@@ -1,2 +1,1 @@
-# status
-RRv2 status plugin
+# Docs: [link](https://roadrunner.dev/docs/plugins-status/2.x/en)
