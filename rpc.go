@@ -1,8 +1,8 @@
 package status
 
 import (
+	"github.com/roadrunner-server/api/v3/plugins/v1/status"
 	"github.com/roadrunner-server/errors"
-	"github.com/roadrunner-server/sdk/v3/plugins/status"
 	"go.uber.org/zap"
 )
 

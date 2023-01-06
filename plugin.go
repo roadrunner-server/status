@@ -1,14 +1,15 @@
 package status
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	endure "github.com/roadrunner-server/endure/pkg/container"
+	"github.com/roadrunner-server/api/v3/plugins/v1/status"
+	"github.com/roadrunner-server/endure/v2/dep"
 	"github.com/roadrunner-server/errors"
-	"github.com/roadrunner-server/sdk/v3/plugins/status"
 	"go.uber.org/zap"
 )
 
@@ -20,14 +21,18 @@ const (
 type Configurer interface {
 	// UnmarshalKey takes a single key and unmarshal it into a Struct.
 	UnmarshalKey(name string, out any) error
-
 	// Has checks if config section exists.
 	Has(name string) bool
+}
+
+type Logger interface {
+	NamedLogger(name string) *zap.Logger
 }
 
 // Checker interface used to get latest status from plugin
 type Checker interface {
 	Status() (*status.Status, error)
+	Name() string
 }
 
 // Readiness interface used to get readiness status from the plugin
@@ -35,6 +40,7 @@ type Checker interface {
 // at the particular moment
 type Readiness interface {
 	Ready() (*status.Status, error)
+	Name() string
 }
 
 type Plugin struct {
@@ -47,7 +53,7 @@ type Plugin struct {
 	cfg           *Config
 }
 
-func (c *Plugin) Init(log *zap.Logger, cfg Configurer) error {
+func (c *Plugin) Init(cfg Configurer, log Logger) error {
 	const op = errors.Op("checker_plugin_init")
 	if !cfg.Has(PluginName) {
 		return errors.E(op, errors.Disabled)
@@ -63,7 +69,7 @@ func (c *Plugin) Init(log *zap.Logger, cfg Configurer) error {
 	c.readyRegistry = make(map[string]Readiness)
 	c.statusRegistry = make(map[string]Checker)
 
-	c.log = log
+	c.log = log.NamedLogger(PluginName)
 
 	return nil
 }
@@ -90,7 +96,7 @@ func (c *Plugin) Serve() chan error {
 	return errCh
 }
 
-func (c *Plugin) Stop() error {
+func (c *Plugin) Stop(context.Context) error {
 	const op = errors.Op("checker_plugin_stop")
 	err := c.server.Shutdown()
 	if err != nil {
@@ -122,23 +128,17 @@ func (c *Plugin) ready(name string) (*status.Status, error) {
 	return svc.Ready()
 }
 
-// CollectCheckerImpls collects services which can provide Status.
-func (c *Plugin) CollectCheckerImpls(name endure.Named, r Checker) error {
-	c.statusRegistry[name.Name()] = r
-	return nil
-}
-
-// CollectReadinessImpls collects services which can provide Readiness check.
-func (c *Plugin) CollectReadinessImpls(name endure.Named, r Readiness) error {
-	c.readyRegistry[name.Name()] = r
-	return nil
-}
-
 // Collects declares services to be collected.
-func (c *Plugin) Collects() []any {
-	return []any{
-		c.CollectReadinessImpls,
-		c.CollectCheckerImpls,
+func (c *Plugin) Collects() []*dep.In {
+	return []*dep.In{
+		dep.Fits(func(p any) {
+			r := p.(Readiness)
+			c.readyRegistry[r.Name()] = r
+		}, (*Readiness)(nil)),
+		dep.Fits(func(p any) {
+			s := p.(Checker)
+			c.statusRegistry[s.Name()] = s
+		}, (*Checker)(nil)),
 	}
 }
 
