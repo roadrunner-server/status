@@ -1,11 +1,11 @@
-module github.com/roadrunner-server/status/v3
+module github.com/roadrunner-server/status/v4
 
 go 1.19
 
 require (
 	github.com/gofiber/fiber/v2 v2.41.0
 	github.com/roadrunner-server/api/v3 v3.1.2
-	github.com/roadrunner-server/endure/v2 v2.0.0-beta.1
+	github.com/roadrunner-server/endure/v2 v2.0.0-rc.2
 	github.com/roadrunner-server/errors v1.2.0
 	go.uber.org/zap v1.24.0
 )
