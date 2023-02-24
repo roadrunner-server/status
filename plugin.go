@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/roadrunner-server/api/v3/plugins/v1/status"
+	"github.com/roadrunner-server/api/v4/plugins/v1/status"
 	"github.com/roadrunner-server/endure/v2/dep"
 	"github.com/roadrunner-server/errors"
 	"go.uber.org/zap"
@@ -31,7 +31,7 @@ type Logger interface {
 
 // Checker interface used to get latest status from plugin
 type Checker interface {
-	Status() (*status.Status, error)
+	Status(ctx *fiber.Ctx) (*status.Status, error)
 	Name() string
 }
 
@@ -114,7 +114,7 @@ func (c *Plugin) status(name string) (*status.Status, error) {
 		return nil, errors.E(op, errors.Errorf("no such plugin: %s", name))
 	}
 
-	return svc.Status()
+	return svc.Status(nil)
 }
 
 // ready used to provide a readiness check for the plugin
@@ -176,7 +176,7 @@ func (c *Plugin) healthHandler(ctx *fiber.Ctx) error {
 	for i := 0; i < len(plugins.Plugins); i++ {
 		// check if the plugin exists
 		if plugin, ok := c.statusRegistry[plugins.Plugins[i]]; ok { //nolint:nestif
-			st, errS := plugin.Status()
+			st, errS := plugin.Status(ctx)
 			if errS != nil {
 				return errS
 			}

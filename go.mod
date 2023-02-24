@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	github.com/gofiber/fiber/v2 v2.42.0
-	github.com/roadrunner-server/api/v3 v3.2.1
+	github.com/roadrunner-server/api/v4 v4.1.0
 	github.com/roadrunner-server/endure/v2 v2.2.0
 	github.com/roadrunner-server/errors v1.2.0
 	go.uber.org/zap v1.24.0
