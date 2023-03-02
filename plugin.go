@@ -8,6 +8,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/roadrunner-server/api/v3/plugins/v1/status"
+	jobsApi "github.com/roadrunner-server/api/v4/plugins/v1/jobs"
 	"github.com/roadrunner-server/endure/v2/dep"
 	"github.com/roadrunner-server/errors"
 	"go.uber.org/zap"
@@ -35,6 +36,11 @@ type Checker interface {
 	Name() string
 }
 
+type JobsChecker interface {
+	JobsState(ctx context.Context) ([]*jobsApi.State, error)
+	Name() string
+}
+
 // Readiness interface used to get readiness status from the plugin
 // that means, that worker poll inside the plugin has 1+ plugins which are ready to work
 // at the particular moment
@@ -45,7 +51,8 @@ type Readiness interface {
 
 type Plugin struct {
 	// plugins which needs to be checked just as Status
-	statusRegistry map[string]Checker
+	statusRegistry     map[string]Checker
+	statusJobsRegistry map[string]JobsChecker
 	// plugins which needs to send Readiness status
 	readyRegistry map[string]Readiness
 	server        *fiber.App
@@ -67,6 +74,7 @@ func (c *Plugin) Init(cfg Configurer, log Logger) error {
 	c.cfg.InitDefaults()
 
 	c.readyRegistry = make(map[string]Readiness)
+	c.statusJobsRegistry = make(map[string]JobsChecker)
 	c.statusRegistry = make(map[string]Checker)
 
 	c.log = log.NamedLogger(PluginName)
@@ -139,6 +147,10 @@ func (c *Plugin) Collects() []*dep.In {
 			s := p.(Checker)
 			c.statusRegistry[s.Name()] = s
 		}, (*Checker)(nil)),
+		dep.Fits(func(p any) {
+			s := p.(JobsChecker)
+			c.statusJobsRegistry[s.Name()] = s
+		}, (*JobsChecker)(nil)),
 	}
 }
 
@@ -175,7 +187,20 @@ func (c *Plugin) healthHandler(ctx *fiber.Ctx) error {
 	// iterate over all provided plugins
 	for i := 0; i < len(plugins.Plugins); i++ {
 		// check if the plugin exists
-		if plugin, ok := c.statusRegistry[plugins.Plugins[i]]; ok { //nolint:nestif
+		if len(c.statusJobsRegistry) != 0 {
+			var m = make(map[string]bool)
+			for _, job := range c.statusJobsRegistry {
+				jobStates, err := job.JobsState(ctx.Context())
+				if err != nil {
+					continue
+				}
+				for _, sj := range jobStates {
+					m[sj.Queue] = sj.Ready
+				}
+			}
+			_ = ctx.JSON(m)
+			ctx.Status(http.StatusOK)
+		} else if plugin, ok := c.statusRegistry[plugins.Plugins[i]]; ok { //nolint:nestif
 			st, errS := plugin.Status()
 			if errS != nil {
 				return errS
