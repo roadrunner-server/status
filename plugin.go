@@ -170,7 +170,7 @@ type Plugins struct {
 
 const template string = "Service: %s: Status: %d\n"
 
-func (c *Plugin) healthHandler(ctx *fiber.Ctx) error {
+func (c *Plugin) healthHandler(ctx *fiber.Ctx) error { //nolint:gocognit
 	const op = errors.Op("checker_plugin_health_handler")
 	plugins := &Plugins{}
 	err := ctx.QueryParser(plugins)
@@ -189,8 +189,9 @@ func (c *Plugin) healthHandler(ctx *fiber.Ctx) error {
 		// check if the plugin exists
 		if len(c.statusJobsRegistry) != 0 {
 			var m = make(map[string]bool)
+			var jobStates []*jobsApi.State
 			for _, job := range c.statusJobsRegistry {
-				jobStates, err := job.JobsState(ctx.Context())
+				jobStates, err = job.JobsState(ctx.Context())
 				if err != nil {
 					c.log.Error("getting job state", zap.Error(err))
 					continue
