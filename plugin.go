@@ -192,13 +192,18 @@ func (c *Plugin) healthHandler(ctx *fiber.Ctx) error {
 			for _, job := range c.statusJobsRegistry {
 				jobStates, err := job.JobsState(ctx.Context())
 				if err != nil {
+					c.log.Error("getting job state", zap.Error(err))
 					continue
 				}
 				for _, sj := range jobStates {
 					m[sj.Queue] = sj.Ready
 				}
 			}
-			_ = ctx.JSON(m)
+			err = ctx.JSON(m)
+			if err != nil {
+				c.log.Error("response marshaling", zap.Error(err))
+				continue
+			}
 			ctx.Status(http.StatusOK)
 		} else if plugin, ok := c.statusRegistry[plugins.Plugins[i]]; ok { //nolint:nestif
 			st, errS := plugin.Status()
