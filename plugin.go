@@ -186,28 +186,10 @@ func (c *Plugin) healthHandler(ctx *fiber.Ctx) error { //nolint:gocognit
 
 	// iterate over all provided plugins
 	for i := 0; i < len(plugins.Plugins); i++ {
-		// check if the plugin exists
-		if len(c.statusJobsRegistry) != 0 {
-			var m = make(map[string]bool)
-			var jobStates []*jobsApi.State
-			for _, job := range c.statusJobsRegistry {
-				jobStates, err = job.JobsState(ctx.Context())
-				if err != nil {
-					c.log.Error("getting job state", zap.Error(err))
-					continue
-				}
-				for _, sj := range jobStates {
-					m[sj.Queue] = sj.Ready
-				}
-			}
-			err = ctx.JSON(m)
-			if err != nil {
-				c.log.Error("response marshaling", zap.Error(err))
-				continue
-			}
-			ctx.Status(http.StatusOK)
-		} else if plugin, ok := c.statusRegistry[plugins.Plugins[i]]; ok { //nolint:nestif
-			st, errS := plugin.Status()
+		switch {
+		// check workers for the plugin
+		case c.statusRegistry[plugins.Plugins[i]] != nil:
+			st, errS := c.statusRegistry[plugins.Plugins[i]].Status()
 			if errS != nil {
 				return errS
 			}
@@ -223,7 +205,30 @@ func (c *Plugin) healthHandler(ctx *fiber.Ctx) error { //nolint:gocognit
 			} else if st.Code >= 100 && st.Code <= 400 {
 				_, _ = ctx.WriteString(fmt.Sprintf(template, plugins.Plugins[i], st.Code))
 			}
-		} else {
+
+			// check job drivers statuses
+			// map is plugin -> states
+		case c.statusJobsRegistry[plugins.Plugins[i]] != nil:
+			var m = make(map[string]bool)
+
+			var jobStates []*jobsApi.State
+			for _, job := range c.statusJobsRegistry {
+				jobStates, err = job.JobsState(ctx.Context())
+				if err != nil {
+					c.log.Error("job state", zap.Error(err))
+					continue
+				}
+				for _, sj := range jobStates {
+					m[sj.Queue] = sj.Ready
+				}
+			}
+			err = ctx.JSON(m)
+			if err != nil {
+				c.log.Error("response marshaling", zap.Error(err))
+				continue
+			}
+			ctx.Status(http.StatusOK)
+		default:
 			_, _ = ctx.WriteString(fmt.Sprintf("Service: %s not found", plugins.Plugins[i]))
 		}
 	}
