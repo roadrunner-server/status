@@ -4,8 +4,7 @@ go 1.20
 
 require (
 	github.com/gofiber/fiber/v2 v2.42.0
-	github.com/roadrunner-server/api/v3 v3.2.1
-	github.com/roadrunner-server/api/v4 v4.1.0
+	github.com/roadrunner-server/api/v4 v4.2.1
 	github.com/roadrunner-server/endure/v2 v2.2.0
 	github.com/roadrunner-server/errors v1.2.0
 	go.uber.org/zap v1.24.0
@@ -28,6 +27,6 @@ require (
 	github.com/valyala/fasthttp v1.44.0 // indirect
 	github.com/valyala/tcplisten v1.0.0 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
-	go.uber.org/multierr v1.9.0 // indirect
+	go.uber.org/multierr v1.10.0 // indirect
 	golang.org/x/sys v0.5.0 // indirect
 )

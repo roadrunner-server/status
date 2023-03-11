@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/roadrunner-server/api/v3/plugins/v1/status"
 	jobsApi "github.com/roadrunner-server/api/v4/plugins/v1/jobs"
+	"github.com/roadrunner-server/api/v4/plugins/v1/status"
 	"github.com/roadrunner-server/endure/v2/dep"
 	"github.com/roadrunner-server/errors"
 	"go.uber.org/zap"
@@ -52,7 +52,7 @@ type Readiness interface {
 type Plugin struct {
 	// plugins which needs to be checked just as Status
 	statusRegistry     map[string]Checker
-	statusJobsRegistry map[string]JobsChecker
+	statusJobsRegistry JobsChecker
 	// plugins which needs to send Readiness status
 	readyRegistry map[string]Readiness
 	server        *fiber.App
@@ -74,7 +74,6 @@ func (c *Plugin) Init(cfg Configurer, log Logger) error {
 	c.cfg.InitDefaults()
 
 	c.readyRegistry = make(map[string]Readiness)
-	c.statusJobsRegistry = make(map[string]JobsChecker)
 	c.statusRegistry = make(map[string]Checker)
 
 	c.log = log.NamedLogger(PluginName)
@@ -148,8 +147,7 @@ func (c *Plugin) Collects() []*dep.In {
 			c.statusRegistry[s.Name()] = s
 		}, (*Checker)(nil)),
 		dep.Fits(func(p any) {
-			s := p.(JobsChecker)
-			c.statusJobsRegistry[s.Name()] = s
+			c.statusJobsRegistry = p.(JobsChecker)
 		}, (*JobsChecker)(nil)),
 	}
 }
@@ -168,9 +166,12 @@ type Plugins struct {
 	Plugins []string `query:"plugin"`
 }
 
-const template string = "Service: %s: Status: %d\n"
+const (
+	template     string = "Service: %s | Status: %d\n"
+	jobsTemplate string = "Service: %s: Pipeline: %s | Priority: %d | Ready: %t | Queue: %s | Active: %d | Delayed: %d | Reserved: %d | Driver: %s | Error: %s \n"
+)
 
-func (c *Plugin) healthHandler(ctx *fiber.Ctx) error { //nolint:gocognit
+func (c *Plugin) healthHandler(ctx *fiber.Ctx) error {
 	const op = errors.Op("checker_plugin_health_handler")
 	plugins := &Plugins{}
 	err := ctx.QueryParser(plugins)
@@ -195,39 +196,43 @@ func (c *Plugin) healthHandler(ctx *fiber.Ctx) error { //nolint:gocognit
 			}
 			if st == nil {
 				// nil can be only if the service unavailable
-				ctx.Status(fiber.StatusServiceUnavailable)
-				return nil
+				_, _ = ctx.WriteString(fmt.Sprintf(template, plugins.Plugins[i], fiber.StatusServiceUnavailable))
+				continue
 			}
+
 			if st.Code >= 500 {
 				// if there is 500 or 503 status code return immediately
-				ctx.Status(c.cfg.UnavailableStatusCode)
-				return nil
+				_, _ = ctx.WriteString(fmt.Sprintf(template, plugins.Plugins[i], c.cfg.UnavailableStatusCode))
+				continue
 			} else if st.Code >= 100 && st.Code <= 400 {
 				_, _ = ctx.WriteString(fmt.Sprintf(template, plugins.Plugins[i], st.Code))
 			}
 
 			// check job drivers statuses
 			// map is plugin -> states
-		case c.statusJobsRegistry[plugins.Plugins[i]] != nil:
-			var m = make(map[string]bool)
-
-			var jobStates []*jobsApi.State
-			for _, job := range c.statusJobsRegistry {
-				jobStates, err = job.JobsState(ctx.Context())
-				if err != nil {
-					c.log.Error("job state", zap.Error(err))
-					continue
-				}
-				for _, sj := range jobStates {
-					m[sj.Queue] = sj.Ready
-				}
-			}
-			err = ctx.JSON(m)
+		case c.statusJobsRegistry != nil:
+			jobStates, err := c.statusJobsRegistry.JobsState(ctx.Context())
 			if err != nil {
-				c.log.Error("response marshaling", zap.Error(err))
+				c.log.Error("jobs state", zap.Error(err))
 				continue
 			}
-			ctx.Status(http.StatusOK)
+
+			// write info about underlying drivers
+			for j := 0; j < len(jobStates); j++ {
+				_, _ = ctx.WriteString(fmt.Sprintf(jobsTemplate,
+					plugins.Plugins[i], // only JOBS plugin
+					jobStates[j].Pipeline,
+					jobStates[j].Priority,
+					jobStates[j].Ready,
+					jobStates[j].Queue,
+					jobStates[j].Active,
+					jobStates[j].Delayed,
+					jobStates[j].Reserved,
+					jobStates[j].Driver,
+					jobStates[j].ErrorMessage,
+				))
+			}
+
 		default:
 			_, _ = ctx.WriteString(fmt.Sprintf("Service: %s not found", plugins.Plugins[i]))
 		}
