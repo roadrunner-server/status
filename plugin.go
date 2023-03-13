@@ -2,12 +2,12 @@ package status
 
 import (
 	"context"
-	"fmt"
+	stderr "errors"
 	"net/http"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
-	"github.com/roadrunner-server/api/v3/plugins/v1/status"
+	jobsApi "github.com/roadrunner-server/api/v4/plugins/v1/jobs"
+	"github.com/roadrunner-server/api/v4/plugins/v1/status"
 	"github.com/roadrunner-server/endure/v2/dep"
 	"github.com/roadrunner-server/errors"
 	"go.uber.org/zap"
@@ -15,7 +15,9 @@ import (
 
 const (
 	// PluginName declares public plugin name.
-	PluginName = "status"
+	PluginName          = "status"
+	pluginsQuery string = "plugin"
+	template     string = "plugin: %s, status: %d\n"
 )
 
 type Configurer interface {
@@ -35,6 +37,11 @@ type Checker interface {
 	Name() string
 }
 
+type JobsChecker interface {
+	JobsState(ctx context.Context) ([]*jobsApi.State, error)
+	Name() string
+}
+
 // Readiness interface used to get readiness status from the plugin
 // that means, that worker poll inside the plugin has 1+ plugins which are ready to work
 // at the particular moment
@@ -48,9 +55,11 @@ type Plugin struct {
 	statusRegistry map[string]Checker
 	// plugins which needs to send Readiness status
 	readyRegistry map[string]Readiness
-	server        *fiber.App
-	log           *zap.Logger
-	cfg           *Config
+	// jobs plugin checker
+	statusJobsRegistry JobsChecker
+	server             *http.Server
+	log                *zap.Logger
+	cfg                *Config
 }
 
 func (c *Plugin) Init(cfg Configurer, log Logger) error {
@@ -76,19 +85,28 @@ func (c *Plugin) Init(cfg Configurer, log Logger) error {
 
 func (c *Plugin) Serve() chan error {
 	errCh := make(chan error, 1)
-	c.server = fiber.New(fiber.Config{
-		ReadTimeout:           time.Second * 5,
-		WriteTimeout:          time.Second * 5,
-		IdleTimeout:           time.Second * 5,
-		DisableStartupMessage: true,
-	})
 
-	c.server.Use("/health", c.healthHandler)
-	c.server.Use("/ready", c.readinessHandler)
+	mux := http.NewServeMux()
+	mux.Handle("/health", NewHealthHandler(c.statusRegistry, c.log, c.cfg.UnavailableStatusCode))
+	mux.Handle("/ready", NewReadyHandler(c.readyRegistry, c.log, c.cfg.UnavailableStatusCode))
+	mux.Handle("/jobs", NewJobsHandler(c.statusJobsRegistry, c.log, c.cfg.UnavailableStatusCode))
 
 	go func() {
-		err := c.server.Listen(c.cfg.Address)
+		c.server = &http.Server{
+			Addr:                         c.cfg.Address,
+			Handler:                      mux,
+			DisableGeneralOptionsHandler: false,
+			ReadTimeout:                  time.Minute,
+			ReadHeaderTimeout:            time.Minute,
+			WriteTimeout:                 time.Minute,
+			IdleTimeout:                  time.Minute,
+		}
+		err := c.server.ListenAndServe()
 		if err != nil {
+			if stderr.Is(err, http.ErrServerClosed) {
+				return
+			}
+
 			errCh <- err
 		}
 	}()
@@ -96,9 +114,9 @@ func (c *Plugin) Serve() chan error {
 	return errCh
 }
 
-func (c *Plugin) Stop(context.Context) error {
+func (c *Plugin) Stop(ctx context.Context) error {
 	const op = errors.Op("checker_plugin_stop")
-	err := c.server.Shutdown()
+	err := c.server.Shutdown(ctx)
 	if err != nil {
 		return errors.E(op, err)
 	}
@@ -139,6 +157,9 @@ func (c *Plugin) Collects() []*dep.In {
 			s := p.(Checker)
 			c.statusRegistry[s.Name()] = s
 		}, (*Checker)(nil)),
+		dep.Fits(func(p any) {
+			c.statusJobsRegistry = p.(JobsChecker)
+		}, (*JobsChecker)(nil)),
 	}
 }
 
@@ -150,98 +171,4 @@ func (c *Plugin) Name() string {
 // RPC returns associated rpc service.
 func (c *Plugin) RPC() any {
 	return &rpc{srv: c, log: c.log}
-}
-
-type Plugins struct {
-	Plugins []string `query:"plugin"`
-}
-
-const template string = "Service: %s: Status: %d\n"
-
-func (c *Plugin) healthHandler(ctx *fiber.Ctx) error {
-	const op = errors.Op("checker_plugin_health_handler")
-	plugins := &Plugins{}
-	err := ctx.QueryParser(plugins)
-	if err != nil {
-		return errors.E(op, err)
-	}
-
-	if len(plugins.Plugins) == 0 {
-		ctx.Status(http.StatusBadRequest)
-		_, _ = ctx.WriteString("No plugins provided in query. Query should be in form of: health?plugin=plugin1&plugin=plugin2 \n")
-		return nil
-	}
-
-	// iterate over all provided plugins
-	for i := 0; i < len(plugins.Plugins); i++ {
-		// check if the plugin exists
-		if plugin, ok := c.statusRegistry[plugins.Plugins[i]]; ok { //nolint:nestif
-			st, errS := plugin.Status()
-			if errS != nil {
-				return errS
-			}
-			if st == nil {
-				// nil can be only if the service unavailable
-				ctx.Status(fiber.StatusServiceUnavailable)
-				return nil
-			}
-			if st.Code >= 500 {
-				// if there is 500 or 503 status code return immediately
-				ctx.Status(c.cfg.UnavailableStatusCode)
-				return nil
-			} else if st.Code >= 100 && st.Code <= 400 {
-				_, _ = ctx.WriteString(fmt.Sprintf(template, plugins.Plugins[i], st.Code))
-			}
-		} else {
-			_, _ = ctx.WriteString(fmt.Sprintf("Service: %s not found", plugins.Plugins[i]))
-		}
-	}
-
-	ctx.Status(http.StatusOK)
-	return nil
-}
-
-// readinessHandler return 200OK if all plugins are ready to serve
-// if one of the plugins return status from the 5xx range, the status for all query will be 503
-func (c *Plugin) readinessHandler(ctx *fiber.Ctx) error {
-	const op = errors.Op("checker_plugin_readiness_handler")
-	plugins := &Plugins{}
-	err := ctx.QueryParser(plugins)
-	if err != nil {
-		return errors.E(op, err)
-	}
-
-	if len(plugins.Plugins) == 0 {
-		ctx.Status(http.StatusBadRequest)
-		_, _ = ctx.WriteString("No plugins provided in query. Query should be in form of: ready?plugin=plugin1&plugin=plugin2 \n")
-		return nil
-	}
-
-	// iterate over all provided plugins
-	for i := 0; i < len(plugins.Plugins); i++ {
-		// check if the plugin exists
-		if plugin, ok := c.readyRegistry[plugins.Plugins[i]]; ok { //nolint:nestif
-			st, errS := plugin.Ready()
-			if errS != nil {
-				return errS
-			}
-			if st == nil {
-				// nil can be only if the service unavailable
-				ctx.Status(fiber.StatusServiceUnavailable)
-				return nil
-			}
-			if st.Code >= 500 {
-				// if there is 500 or 503 status code return immediately
-				ctx.Status(c.cfg.UnavailableStatusCode)
-				return nil
-			} else if st.Code >= 100 && st.Code <= 400 {
-				_, _ = ctx.WriteString(fmt.Sprintf(template, plugins.Plugins[i], st.Code))
-			}
-		} else {
-			_, _ = ctx.WriteString(fmt.Sprintf("Service: %s not found", plugins.Plugins[i]))
-		}
-	}
-
-	ctx.Status(http.StatusOK)
-	return nil
 }
