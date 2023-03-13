@@ -3,6 +3,7 @@ package status
 import (
 	"context"
 	"fmt"
+	"html"
 	"net/http"
 
 	"go.uber.org/zap"
@@ -34,12 +35,13 @@ func (jb *Jobs) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 	jobStates, err := jb.statusJobsRegistry.JobsState(context.Background())
 	if err != nil {
 		jb.log.Error("jobs state", zap.Error(err))
+		http.Error(w, "jobs plugin not found", jb.unavailableStatusCode)
 		return
 	}
 
 	// write info about underlying drivers
 	for i := 0; i < len(jobStates); i++ {
-		_, _ = w.Write([]byte(fmt.Sprintf(jobsTemplate,
+		_, _ = w.Write([]byte(html.UnescapeString(fmt.Sprintf(jobsTemplate,
 			"jobs", // only JOBS plugin
 			jobStates[i].Pipeline,
 			jobStates[i].Priority,
@@ -50,6 +52,6 @@ func (jb *Jobs) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 			jobStates[i].Reserved,
 			jobStates[i].Driver,
 			jobStates[i].ErrorMessage,
-		)))
+		))))
 	}
 }

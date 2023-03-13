@@ -2,6 +2,7 @@ package status
 
 import (
 	"fmt"
+	"html"
 	"net/http"
 
 	"go.uber.org/zap"
@@ -51,25 +52,25 @@ func (rd *Ready) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if st == nil {
 				// nil can be only if the service unavailable
 				w.WriteHeader(rd.unavailableStatusCode)
-				_, _ = w.Write([]byte(fmt.Sprintf(template, pl[i], rd.unavailableStatusCode)))
+				_, _ = w.Write([]byte(fmt.Sprintf(template, html.EscapeString(pl[i]), rd.unavailableStatusCode)))
 				return
 			}
 
 			if st.Code >= 500 {
 				// if there is 500 or 503 status code return immediately
 				w.WriteHeader(rd.unavailableStatusCode)
-				_, _ = w.Write([]byte(fmt.Sprintf(template, pl[i], rd.unavailableStatusCode)))
+				_, _ = w.Write([]byte(fmt.Sprintf(template, html.EscapeString(pl[i]), rd.unavailableStatusCode)))
 				return
 			} else if st.Code >= 100 && st.Code <= 400 {
 				_, _ = w.Write([]byte(fmt.Sprintf(template, pl[i], st.Code)))
 				continue
 			}
 
-			_, _ = w.Write([]byte(fmt.Sprintf("plugin: %s not found", pl[i])))
+			_, _ = w.Write([]byte(fmt.Sprintf("plugin: %s not found", html.EscapeString(pl[i]))))
 			// check job drivers statuses
 			// map is plugin -> states
 		default:
-			_, _ = w.Write([]byte(fmt.Sprintf("plugin: %s not found", pl[i])))
+			_, _ = w.Write([]byte(fmt.Sprintf("plugin: %s not found", html.EscapeString(pl[i]))))
 		}
 	}
 

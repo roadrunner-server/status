@@ -2,6 +2,7 @@ package status
 
 import (
 	"fmt"
+	"html"
 	"net/http"
 
 	"go.uber.org/zap"
@@ -48,25 +49,23 @@ func (rd *Health) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if st == nil {
 				w.WriteHeader(rd.unavailableStatusCode)
 				// nil can be only if the service unavailable
-				_, _ = w.Write([]byte(fmt.Sprintf(template, pl[i], rd.unavailableStatusCode)))
+				_, _ = w.Write([]byte(fmt.Sprintf(template, html.UnescapeString(pl[i]), rd.unavailableStatusCode)))
 				return
 			}
 
 			if st.Code >= 500 {
 				w.WriteHeader(rd.unavailableStatusCode)
 				// if there is 500 or 503 status code return immediately
-				_, _ = w.Write([]byte(fmt.Sprintf(template, pl[i], rd.unavailableStatusCode)))
+				_, _ = w.Write([]byte(fmt.Sprintf(template, html.UnescapeString(pl[i]), rd.unavailableStatusCode)))
 				return
 			} else if st.Code >= 100 && st.Code <= 400 {
-				_, _ = w.Write([]byte(fmt.Sprintf(template, pl[i], st.Code)))
+				_, _ = w.Write([]byte(fmt.Sprintf(template, html.UnescapeString(pl[i]), st.Code)))
 				continue
 			}
 
-			_, _ = w.Write([]byte(fmt.Sprintf("plugin: %s not found", pl[i])))
-			// check job drivers statuses
-			// map is plugin -> states
+			_, _ = w.Write([]byte(fmt.Sprintf("plugin: %s not found", html.UnescapeString(pl[i]))))
 		default:
-			_, _ = w.Write([]byte(fmt.Sprintf("plugin: %s not found", pl[i])))
+			_, _ = w.Write([]byte(fmt.Sprintf("plugin: %s not found", html.UnescapeString(pl[i]))))
 		}
 	}
 
