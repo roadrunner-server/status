@@ -62,7 +62,7 @@ func (rd *Ready) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				_, _ = w.Write([]byte(fmt.Sprintf(template, html.EscapeString(pl[i]), rd.unavailableStatusCode)))
 				return
 			} else if st.Code >= 100 && st.Code <= 400 {
-				_, _ = w.Write([]byte(fmt.Sprintf(template, pl[i], st.Code)))
+				_, _ = w.Write([]byte(fmt.Sprintf(template, html.EscapeString(pl[i]), st.Code)))
 				continue
 			}
 
