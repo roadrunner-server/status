@@ -4,6 +4,7 @@ import (
 	"context"
 	stderr "errors"
 	"net/http"
+	"sync"
 	"time"
 
 	jobsApi "github.com/roadrunner-server/api/v4/plugins/v1/jobs"
@@ -51,6 +52,7 @@ type Readiness interface {
 }
 
 type Plugin struct {
+	mu sync.Mutex
 	// plugins which needs to be checked just as Status
 	statusRegistry map[string]Checker
 	// plugins which needs to send Readiness status
@@ -91,6 +93,9 @@ func (c *Plugin) Serve() chan error {
 	mux.Handle("/ready", NewReadyHandler(c.readyRegistry, c.log, c.cfg.UnavailableStatusCode))
 	mux.Handle("/jobs", NewJobsHandler(c.statusJobsRegistry, c.log, c.cfg.UnavailableStatusCode))
 
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	go func() {
 		c.server = &http.Server{
 			Addr:                         c.cfg.Address,
@@ -116,6 +121,9 @@ func (c *Plugin) Serve() chan error {
 
 func (c *Plugin) Stop(ctx context.Context) error {
 	const op = errors.Op("checker_plugin_stop")
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	err := c.server.Shutdown(ctx)
 	if err != nil {
 		return errors.E(op, err)
