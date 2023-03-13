@@ -41,7 +41,7 @@ func (jb *Jobs) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 
 	// write info about underlying drivers
 	for i := 0; i < len(jobStates); i++ {
-		_, _ = w.Write([]byte(html.UnescapeString(fmt.Sprintf(jobsTemplate,
+		_, _ = w.Write([]byte(html.EscapeString(fmt.Sprintf(jobsTemplate,
 			"jobs", // only JOBS plugin
 			jobStates[i].Pipeline,
 			jobStates[i].Priority,
