@@ -30,7 +30,7 @@ func (rd *Ready) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pl := r.URL.Query()[plugins]
+	pl := r.URL.Query()[pluginsQuery]
 
 	if len(pl) == 0 {
 		http.Error(w, "No plugins provided in query. Query should be in form of: ready?plugin=plugin1&plugin=plugin2", http.StatusBadRequest)
@@ -50,15 +50,15 @@ func (rd *Ready) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 			if st == nil {
 				// nil can be only if the service unavailable
-				_, _ = w.Write([]byte(fmt.Sprintf(template, pl[i], rd.unavailableStatusCode)))
 				w.WriteHeader(rd.unavailableStatusCode)
+				_, _ = w.Write([]byte(fmt.Sprintf(template, pl[i], rd.unavailableStatusCode)))
 				return
 			}
 
 			if st.Code >= 500 {
 				// if there is 500 or 503 status code return immediately
-				_, _ = w.Write([]byte(fmt.Sprintf(template, pl[i], rd.unavailableStatusCode)))
 				w.WriteHeader(rd.unavailableStatusCode)
+				_, _ = w.Write([]byte(fmt.Sprintf(template, pl[i], rd.unavailableStatusCode)))
 				return
 			} else if st.Code >= 100 && st.Code <= 400 {
 				_, _ = w.Write([]byte(fmt.Sprintf(template, pl[i], st.Code)))

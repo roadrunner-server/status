@@ -2,6 +2,7 @@ package status
 
 import (
 	"context"
+	stderr "errors"
 	"net/http"
 	"time"
 
@@ -14,8 +15,9 @@ import (
 
 const (
 	// PluginName declares public plugin name.
-	PluginName        = "status"
-	template   string = "plugin: %s | status: %d\n"
+	PluginName          = "status"
+	pluginsQuery string = "plugin"
+	template     string = "plugin: %s, status: %d\n"
 )
 
 type Configurer interface {
@@ -90,7 +92,7 @@ func (c *Plugin) Serve() chan error {
 	mux.Handle("/jobs", NewJobsHandler(c.statusJobsRegistry, c.log, c.cfg.UnavailableStatusCode))
 
 	go func() {
-		server := &http.Server{
+		c.server = &http.Server{
 			Addr:                         c.cfg.Address,
 			Handler:                      mux,
 			DisableGeneralOptionsHandler: false,
@@ -99,8 +101,12 @@ func (c *Plugin) Serve() chan error {
 			WriteTimeout:                 time.Minute,
 			IdleTimeout:                  time.Minute,
 		}
-		err := server.ListenAndServe()
+		err := c.server.ListenAndServe()
 		if err != nil {
+			if stderr.Is(err, http.ErrServerClosed) {
+				return
+			}
+
 			errCh <- err
 		}
 	}()
