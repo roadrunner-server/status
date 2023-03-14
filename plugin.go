@@ -94,18 +94,18 @@ func (c *Plugin) Serve() chan error {
 	mux.Handle("/jobs", NewJobsHandler(c.statusJobsRegistry, c.log, c.cfg.UnavailableStatusCode))
 
 	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.server = &http.Server{
+		Addr:                         c.cfg.Address,
+		Handler:                      mux,
+		DisableGeneralOptionsHandler: false,
+		ReadTimeout:                  time.Minute,
+		ReadHeaderTimeout:            time.Minute,
+		WriteTimeout:                 time.Minute,
+		IdleTimeout:                  time.Minute,
+	}
+	c.mu.Unlock()
 
 	go func() {
-		c.server = &http.Server{
-			Addr:                         c.cfg.Address,
-			Handler:                      mux,
-			DisableGeneralOptionsHandler: false,
-			ReadTimeout:                  time.Minute,
-			ReadHeaderTimeout:            time.Minute,
-			WriteTimeout:                 time.Minute,
-			IdleTimeout:                  time.Minute,
-		}
 		err := c.server.ListenAndServe()
 		if err != nil {
 			if stderr.Is(err, http.ErrServerClosed) {
