@@ -24,14 +24,22 @@ func NewHealthHandler(sr map[string]Checker, log *zap.Logger, usc int) *Health {
 
 func (rd *Health) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r == nil || r.URL == nil || r.URL.Query() == nil {
-		http.Error(w, "No plugins provided in query. Query should be in form of: health?plugin=plugin1&plugin=plugin2", http.StatusBadRequest)
+		http.Error(
+			w,
+			"No plugins provided in query. Query should be in form of: health?plugin=plugin1&plugin=plugin2",
+			http.StatusBadRequest,
+		)
 		return
 	}
 
 	pl := r.URL.Query()[pluginsQuery]
 
 	if len(pl) == 0 {
-		http.Error(w, "No plugins provided in query. Query should be in form of: health?plugin=plugin1&plugin=plugin2", http.StatusBadRequest)
+		http.Error(
+			w,
+			"No plugins provided in query. Query should be in form of: health?plugin=plugin1&plugin=plugin2",
+			http.StatusBadRequest,
+		)
 		return
 	}
 
@@ -53,21 +61,20 @@ func (rd *Health) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			if st.Code >= 500 {
+			switch {
+			case st.Code >= 500:
 				w.WriteHeader(rd.unavailableStatusCode)
 				// if there is 500 or 503 status code return immediately
 				_, _ = w.Write([]byte(fmt.Sprintf(template, html.EscapeString(pl[i]), rd.unavailableStatusCode)))
 				return
-			} else if st.Code >= 100 && st.Code <= 400 {
+			case st.Code >= 100 && st.Code <= 400:
 				_, _ = w.Write([]byte(fmt.Sprintf(template, html.EscapeString(pl[i]), st.Code)))
 				continue
+			default:
+				_, _ = w.Write([]byte(fmt.Sprintf("plugin: %s not found", html.EscapeString(pl[i]))))
 			}
-
-			_, _ = w.Write([]byte(fmt.Sprintf("plugin: %s not found", html.EscapeString(pl[i]))))
 		default:
 			_, _ = w.Write([]byte(fmt.Sprintf("plugin: %s not found", html.EscapeString(pl[i]))))
 		}
 	}
-
-	w.WriteHeader(http.StatusOK)
 }
