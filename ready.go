@@ -27,14 +27,22 @@ func NewReadyHandler(sr map[string]Readiness, log *zap.Logger, usc int) *Ready {
 
 func (rd *Ready) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r == nil || r.URL == nil || r.URL.Query() == nil {
-		http.Error(w, "No plugins provided in query. Query should be in form of: ready?plugin=plugin1&plugin=plugin2", http.StatusBadRequest)
+		http.Error(
+			w,
+			"No plugins provided in query. Query should be in form of: ready?plugin=plugin1&plugin=plugin2",
+			http.StatusBadRequest,
+		)
 		return
 	}
 
 	pl := r.URL.Query()[pluginsQuery]
 
 	if len(pl) == 0 {
-		http.Error(w, "No plugins provided in query. Query should be in form of: ready?plugin=plugin1&plugin=plugin2", http.StatusBadRequest)
+		http.Error(
+			w,
+			"No plugins provided in query. Query should be in form of: ready?plugin=plugin1&plugin=plugin2",
+			http.StatusBadRequest,
+		)
 		return
 	}
 
@@ -73,6 +81,4 @@ func (rd *Ready) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			_, _ = w.Write([]byte(fmt.Sprintf("plugin: %s not found", html.EscapeString(pl[i]))))
 		}
 	}
-
-	w.WriteHeader(http.StatusOK)
 }
