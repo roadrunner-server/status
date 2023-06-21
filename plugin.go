@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	jobsApi "github.com/roadrunner-server/api/v4/plugins/v1/jobs"
 	"github.com/roadrunner-server/api/v4/plugins/v1/status"
+	jobsApi "github.com/roadrunner-server/api/v4/plugins/v2/jobs"
 	"github.com/roadrunner-server/endure/v2/dep"
 	"github.com/roadrunner-server/errors"
 	"go.uber.org/zap"
