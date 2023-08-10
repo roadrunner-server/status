@@ -1,8 +1,8 @@
 package status
 
 import (
+	statusv1beta1 "github.com/roadrunner-server/api/v4/build/status/v1"
 	"github.com/roadrunner-server/errors"
-	statusv1beta1 "go.buf.build/protocolbuffers/go/roadrunner-server/api/status/v1beta1"
 	"go.uber.org/zap"
 )
 
