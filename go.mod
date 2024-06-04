@@ -4,7 +4,7 @@ go 1.22.3
 
 require (
 	github.com/roadrunner-server/api/v4 v4.12.0
-	github.com/roadrunner-server/endure/v2 v2.4.4
+	github.com/roadrunner-server/endure/v2 v2.4.5
 	github.com/roadrunner-server/errors v1.4.0
 	go.uber.org/zap v1.27.0
 )
