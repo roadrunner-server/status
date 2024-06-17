@@ -5,6 +5,7 @@ import (
 	stderr "errors"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/roadrunner-server/api/v4/plugins/v1/status"
@@ -24,7 +25,7 @@ const (
 type Configurer interface {
 	// UnmarshalKey takes a single key and unmarshal it into a Struct.
 	UnmarshalKey(name string, out any) error
-	// Has checks if config section exists.
+	// Has checks if a config section exists.
 	Has(name string) bool
 }
 
@@ -32,7 +33,7 @@ type Logger interface {
 	NamedLogger(name string) *zap.Logger
 }
 
-// Checker interface used to get latest status from plugin
+// Checker interface used to get the latest status from plugin
 type Checker interface {
 	Status() (*status.Status, error)
 	Name() string
@@ -44,7 +45,7 @@ type JobsChecker interface {
 }
 
 // Readiness interface used to get readiness status from the plugin
-// that means, that worker poll inside the plugin has 1+ plugins which are ready to work
+// that means that a worker pool inside the plugin has 1+ plugins which are ready to work
 // at the particular moment
 type Readiness interface {
 	Ready() (*status.Status, error)
@@ -53,15 +54,17 @@ type Readiness interface {
 
 type Plugin struct {
 	mu sync.Mutex
-	// plugins which needs to be checked just as Status
+	// plugins that need to be checked just as Status
 	statusRegistry map[string]Checker
-	// plugins which needs to send Readiness status
+	// plugins that need to send Readiness status
 	readyRegistry map[string]Readiness
 	// jobs plugin checker
 	statusJobsRegistry JobsChecker
-	server             *http.Server
-	log                *zap.Logger
-	cfg                *Config
+	// shared pointer
+	shutdownInitiated atomic.Pointer[bool]
+	server            *http.Server
+	log               *zap.Logger
+	cfg               *Config
 }
 
 func (c *Plugin) Init(cfg Configurer, log Logger) error {
@@ -79,6 +82,7 @@ func (c *Plugin) Init(cfg Configurer, log Logger) error {
 
 	c.readyRegistry = make(map[string]Readiness)
 	c.statusRegistry = make(map[string]Checker)
+	c.shutdownInitiated.Store(toPtr(false))
 
 	c.log = log.NamedLogger(PluginName)
 
@@ -89,9 +93,9 @@ func (c *Plugin) Serve() chan error {
 	errCh := make(chan error, 1)
 
 	mux := http.NewServeMux()
-	mux.Handle("/health", NewHealthHandler(c.statusRegistry, c.log, c.cfg.UnavailableStatusCode))
-	mux.Handle("/ready", NewReadyHandler(c.readyRegistry, c.log, c.cfg.UnavailableStatusCode))
-	mux.Handle("/jobs", NewJobsHandler(c.statusJobsRegistry, c.log, c.cfg.UnavailableStatusCode))
+	mux.Handle("/health", NewHealthHandler(c.statusRegistry, &c.shutdownInitiated, c.log, c.cfg.UnavailableStatusCode))
+	mux.Handle("/ready", NewReadyHandler(c.readyRegistry, &c.shutdownInitiated, c.log, c.cfg.UnavailableStatusCode))
+	mux.Handle("/jobs", NewJobsHandler(c.statusJobsRegistry, &c.shutdownInitiated, c.log, c.cfg.UnavailableStatusCode))
 
 	c.mu.Lock()
 	c.server = &http.Server{
@@ -119,20 +123,19 @@ func (c *Plugin) Serve() chan error {
 	return errCh
 }
 
-func (c *Plugin) Stop(ctx context.Context) error {
-	const op = errors.Op("checker_plugin_stop")
+func (c *Plugin) Stop(_ context.Context) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	err := c.server.Shutdown(ctx)
-	if err != nil {
-		return errors.E(op, err)
-	}
+	// set shutdown to true, thus all endpoints will return 503
+	c.shutdownInitiated.Store(toPtr(true))
+
 	return nil
 }
 
-// status returns a Checker interface implementation
-// Reset named service. This is not an Status interface implementation
+// Status returns a Checker interface implementation
+// Reset named service.
+// This is not a Status interface implementation
 func (c *Plugin) status(name string) (*status.Status, error) {
 	const op = errors.Op("checker_plugin_status")
 	svc, ok := c.statusRegistry[name]
@@ -143,7 +146,7 @@ func (c *Plugin) status(name string) (*status.Status, error) {
 	return svc.Status()
 }
 
-// ready used to provide a readiness check for the plugin
+// ready is used to provide a readiness check for the plugin
 func (c *Plugin) ready(name string) (*status.Status, error) {
 	const op = errors.Op("checker_plugin_ready")
 	svc, ok := c.readyRegistry[name]
@@ -154,7 +157,7 @@ func (c *Plugin) ready(name string) (*status.Status, error) {
 	return svc.Ready()
 }
 
-// Collects declares services to be collected.
+// Collects declare services to be collected.
 func (c *Plugin) Collects() []*dep.In {
 	return []*dep.In{
 		dep.Fits(func(p any) {
@@ -171,6 +174,16 @@ func (c *Plugin) Collects() []*dep.In {
 	}
 }
 
+// StopHTTPServer stops the http server, used only for TEST purposes
+func (c *Plugin) StopHTTPServer() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.server != nil {
+		_ = c.server.Close()
+	}
+}
+
 // Name of the service.
 func (c *Plugin) Name() string {
 	return PluginName
@@ -179,4 +192,8 @@ func (c *Plugin) Name() string {
 // RPC returns associated rpc service.
 func (c *Plugin) RPC() any {
 	return &rpc{srv: c, log: c.log}
+}
+
+func toPtr[T any](v T) *T {
+	return &v
 }

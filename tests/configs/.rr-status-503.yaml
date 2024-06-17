@@ -1,0 +1,24 @@
+version: '3'
+
+rpc:
+  listen: tcp://127.0.0.1:6008
+
+server:
+  command: "php php_test_files/sleep.php"
+  relay: "pipes"
+  relay_timeout: "20s"
+
+status:
+  address: "127.0.0.1:34711"
+
+logs:
+  mode: development
+  level: debug
+
+http:
+  address: 127.0.0.1:11934
+  pool:
+    num_workers: 1
+
+endure:
+  grace_period: 10s
