@@ -33,19 +33,20 @@ const resp = `plugin: http, status: 200
 plugin: rpc not found`
 
 func TestStatusHttp(t *testing.T) {
-	cont := endure.New(slog.LevelDebug)
+	cont := endure.New(slog.LevelDebug, endure.GracefulShutdownTimeout(time.Second))
 
 	cfg := &config.Plugin{
 		Version: "2024.1.0",
 		Path:    "configs/.rr-status-init.yaml",
 	}
 
+	sp := &status.Plugin{}
 	err := cont.RegisterAll(
 		cfg,
 		&logger.Plugin{},
 		&server.Plugin{},
 		&httpPlugin.Plugin{},
-		&status.Plugin{},
+		sp,
 	)
 	assert.NoError(t, err)
 
@@ -97,23 +98,28 @@ func TestStatusHttp(t *testing.T) {
 
 	stopCh <- struct{}{}
 	wg.Wait()
+
+	t.Cleanup(func() {
+		sp.StopHTTPServer()
+	})
 }
 
 func TestStatusRPC(t *testing.T) {
-	cont := endure.New(slog.LevelDebug)
+	cont := endure.New(slog.LevelDebug, endure.GracefulShutdownTimeout(time.Second))
 
 	cfg := &config.Plugin{
 		Version: "2024.1.0",
 		Path:    "configs/.rr-status-init.yaml",
 	}
 
+	sp := &status.Plugin{}
 	err := cont.RegisterAll(
 		cfg,
 		&rpcPlugin.Plugin{},
 		&logger.Plugin{},
 		&server.Plugin{},
+		sp,
 		&httpPlugin.Plugin{},
-		&status.Plugin{},
 	)
 	assert.NoError(t, err)
 
@@ -166,23 +172,27 @@ func TestStatusRPC(t *testing.T) {
 	})
 	stopCh <- struct{}{}
 	wg.Wait()
+
+	t.Cleanup(func() {
+		sp.StopHTTPServer()
+	})
 }
 
 func TestReadyHttp(t *testing.T) {
-	cont := endure.New(slog.LevelDebug)
+	cont := endure.New(slog.LevelDebug, endure.GracefulShutdownTimeout(time.Second))
 
 	cfg := &config.Plugin{
 		Version: "2024.1.0",
 		Path:    "configs/.rr-status-init.yaml",
-		Prefix:  "rr",
 	}
 
+	sp := &status.Plugin{}
 	err := cont.RegisterAll(
 		cfg,
 		&logger.Plugin{},
 		&server.Plugin{},
 		&httpPlugin.Plugin{},
-		&status.Plugin{},
+		sp,
 	)
 	assert.NoError(t, err)
 
@@ -234,6 +244,10 @@ func TestReadyHttp(t *testing.T) {
 
 	stopCh <- struct{}{}
 	wg.Wait()
+
+	t.Cleanup(func() {
+		sp.StopHTTPServer()
+	})
 }
 
 func TestReadinessRPCWorkerNotReady(t *testing.T) {
@@ -242,16 +256,16 @@ func TestReadinessRPCWorkerNotReady(t *testing.T) {
 	cfg := &config.Plugin{
 		Version: "2024.1.0",
 		Path:    "configs/.rr-ready-init.yaml",
-		Prefix:  "rr",
 	}
 
+	sp := &status.Plugin{}
 	err := cont.RegisterAll(
 		cfg,
 		&rpcPlugin.Plugin{},
 		&logger.Plugin{},
 		&server.Plugin{},
 		&httpPlugin.Plugin{},
-		&status.Plugin{},
+		sp,
 	)
 	assert.NoError(t, err)
 
@@ -304,6 +318,10 @@ func TestReadinessRPCWorkerNotReady(t *testing.T) {
 	})
 	stopCh <- struct{}{}
 	wg.Wait()
+
+	t.Cleanup(func() {
+		sp.StopHTTPServer()
+	})
 }
 
 func TestJobsStatus(t *testing.T) {
@@ -312,15 +330,15 @@ func TestJobsStatus(t *testing.T) {
 	cfg := &config.Plugin{
 		Version: "2023.1.0",
 		Path:    "configs/.rr-jobs-status.yaml",
-		Prefix:  "rr",
 	}
 
+	sp := &status.Plugin{}
 	err := cont.RegisterAll(
 		cfg,
 		&rpcPlugin.Plugin{},
 		&logger.Plugin{},
 		&server.Plugin{},
-		&status.Plugin{},
+		sp,
 		&jobs.Plugin{},
 		&memory.Plugin{},
 	)
@@ -387,6 +405,10 @@ func TestJobsStatus(t *testing.T) {
 
 	stopCh <- struct{}{}
 	wg.Wait()
+
+	t.Cleanup(func() {
+		sp.StopHTTPServer()
+	})
 }
 
 func TestJobsReadiness(t *testing.T) {
@@ -395,15 +417,15 @@ func TestJobsReadiness(t *testing.T) {
 	cfg := &config.Plugin{
 		Version: "2023.2.0",
 		Path:    "configs/.rr-jobs-status.yaml",
-		Prefix:  "rr",
 	}
 
+	sp := &status.Plugin{}
 	err := cont.RegisterAll(
 		cfg,
 		&rpcPlugin.Plugin{},
 		&logger.Plugin{},
 		&server.Plugin{},
-		&status.Plugin{},
+		sp,
 		&jobs.Plugin{},
 	)
 	assert.NoError(t, err)
@@ -457,6 +479,10 @@ func TestJobsReadiness(t *testing.T) {
 
 	stopCh <- struct{}{}
 	wg.Wait()
+
+	t.Cleanup(func() {
+		sp.StopHTTPServer()
+	})
 }
 
 func TestShutdown503(t *testing.T) {
@@ -464,15 +490,17 @@ func TestShutdown503(t *testing.T) {
 
 	cfg := &config.Plugin{
 		Version: "2024.1.0",
+		Timeout: time.Second * 10,
 		Path:    "configs/.rr-status-503.yaml",
 	}
 
+	sp := &status.Plugin{}
 	err := cont.RegisterAll(
 		cfg,
 		&rpcPlugin.Plugin{},
 		&logger.Plugin{},
 		&server.Plugin{},
-		&status.Plugin{},
+		sp,
 		&jobs.Plugin{},
 	)
 	assert.NoError(t, err)
@@ -544,6 +572,10 @@ func TestShutdown503(t *testing.T) {
 	assert.Equal(t, http.StatusServiceUnavailable, rsp.StatusCode)
 
 	wg.Wait()
+
+	t.Cleanup(func() {
+		sp.StopHTTPServer()
+	})
 }
 
 func checkJobsReadiness(t *testing.T) {

@@ -174,6 +174,16 @@ func (c *Plugin) Collects() []*dep.In {
 	}
 }
 
+// StopHTTPServer stops the http server, used only for TEST purposes
+func (c *Plugin) StopHTTPServer() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.server != nil {
+		_ = c.server.Close()
+	}
+}
+
 // Name of the service.
 func (c *Plugin) Name() string {
 	return PluginName
