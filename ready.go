@@ -4,28 +4,36 @@ import (
 	"fmt"
 	"html"
 	"net/http"
+	"sync/atomic"
 
 	"go.uber.org/zap"
 )
 
 // readinessHandler return 200OK if all plugins are ready to serve
-// if one of the plugins return status from the 5xx range, the status for all query will be 503
+// if one of the plugins returns status from the 5xx range, the status for all queries will be 503
 
 type Ready struct {
 	log                   *zap.Logger
 	unavailableStatusCode int
 	statusRegistry        map[string]Readiness
+	shutdownInitiated     *atomic.Pointer[bool]
 }
 
-func NewReadyHandler(sr map[string]Readiness, log *zap.Logger, usc int) *Ready {
+func NewReadyHandler(sr map[string]Readiness, shutdownInitiated *atomic.Pointer[bool], log *zap.Logger, usc int) *Ready {
 	return &Ready{
 		log:                   log,
 		statusRegistry:        sr,
 		unavailableStatusCode: usc,
+		shutdownInitiated:     shutdownInitiated,
 	}
 }
 
 func (rd *Ready) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if rd.shutdownInitiated != nil && *rd.shutdownInitiated.Load() {
+		http.Error(w, "service is shutting down", http.StatusServiceUnavailable)
+		return
+	}
+
 	if r == nil || r.URL == nil || r.URL.Query() == nil {
 		http.Error(
 			w,
@@ -58,14 +66,14 @@ func (rd *Ready) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 
 			if st == nil {
-				// nil can be only if the service unavailable
+				// nil can be only if the service is unavailable
 				w.WriteHeader(rd.unavailableStatusCode)
 				_, _ = w.Write([]byte(fmt.Sprintf(template, html.EscapeString(pl[i]), rd.unavailableStatusCode)))
 				return
 			}
 
 			if st.Code >= 500 {
-				// if there is 500 or 503 status code return immediately
+				// if there are 500 or 503 status codes return immediately
 				w.WriteHeader(rd.unavailableStatusCode)
 				_, _ = w.Write([]byte(fmt.Sprintf(template, html.EscapeString(pl[i]), rd.unavailableStatusCode)))
 				return

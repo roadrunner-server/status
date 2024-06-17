@@ -1,6 +1,7 @@
 package status
 
 import (
+	"context"
 	"io"
 	"log/slog"
 	"net"
@@ -457,6 +458,93 @@ func TestJobsReadiness(t *testing.T) {
 	})
 
 	stopCh <- struct{}{}
+	wg.Wait()
+}
+
+func TestShutdown503(t *testing.T) {
+	cont := endure.New(slog.LevelDebug, endure.GracefulShutdownTimeout(time.Second*10))
+
+	cfg := &config.Plugin{
+		Version: "2024.1.0",
+		Path:    "configs/.rr-status-503.yaml",
+	}
+
+	err := cont.RegisterAll(
+		cfg,
+		&rpcPlugin.Plugin{},
+		&logger.Plugin{},
+		&server.Plugin{},
+		&status.Plugin{},
+		&jobs.Plugin{},
+	)
+	assert.NoError(t, err)
+
+	err = cont.Init()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ch, err := cont.Serve()
+	assert.NoError(t, err)
+
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+
+	stopCh := make(chan struct{}, 1)
+
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case e := <-ch:
+				assert.Fail(t, "error", e.Error.Error())
+				err = cont.Stop()
+				if err != nil {
+					assert.FailNow(t, "error", err.Error())
+				}
+			case <-sig:
+				err = cont.Stop()
+				if err != nil {
+					assert.FailNow(t, "error", err.Error())
+				}
+				return
+			case <-stopCh:
+				// timeout, error here is OK, because in the PHP we are sleeping for the 300s
+				_ = cont.Stop()
+				return
+			}
+		}
+	}()
+
+	time.Sleep(time.Second)
+	go func() {
+		httpClient := &http.Client{
+			Timeout: time.Second * 10,
+		}
+
+		req, err2 := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://127.0.0.1:11934", nil)
+		assert.NoError(t, err2)
+		_, _ = httpClient.Do(req)
+	}()
+	time.Sleep(time.Second)
+	stopCh <- struct{}{}
+
+	httpClient := &http.Client{
+		Timeout: time.Second * 10,
+	}
+
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://127.0.0.1:34711/health", nil)
+	assert.NoError(t, err)
+	require.NotNil(t, req)
+
+	rsp, err := httpClient.Do(req)
+	require.NoError(t, err)
+
+	assert.Equal(t, http.StatusServiceUnavailable, rsp.StatusCode)
+
 	wg.Wait()
 }
 

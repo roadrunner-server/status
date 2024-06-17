@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html"
 	"net/http"
+	"sync/atomic"
 
 	"go.uber.org/zap"
 )
@@ -17,17 +18,24 @@ type Jobs struct {
 	statusJobsRegistry    JobsChecker
 	unavailableStatusCode int
 	log                   *zap.Logger
+	shutdownInitiated     *atomic.Pointer[bool]
 }
 
-func NewJobsHandler(jc JobsChecker, log *zap.Logger, usc int) *Jobs {
+func NewJobsHandler(jc JobsChecker, shutdownInitiated *atomic.Pointer[bool], log *zap.Logger, usc int) *Jobs {
 	return &Jobs{
 		statusJobsRegistry:    jc,
 		unavailableStatusCode: usc,
 		log:                   log,
+		shutdownInitiated:     shutdownInitiated,
 	}
 }
 
 func (jb *Jobs) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
+	if jb.shutdownInitiated != nil && *jb.shutdownInitiated.Load() {
+		http.Error(w, "service is shutting down", http.StatusServiceUnavailable)
+		return
+	}
+
 	if jb.statusJobsRegistry == nil {
 		http.Error(w, "jobs plugin not found", jb.unavailableStatusCode)
 	}

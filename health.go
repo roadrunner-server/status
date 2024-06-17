@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html"
 	"net/http"
+	"sync/atomic"
 
 	"go.uber.org/zap"
 )
@@ -12,17 +13,24 @@ type Health struct {
 	log                   *zap.Logger
 	unavailableStatusCode int
 	statusRegistry        map[string]Checker
+	shutdownInitiated     *atomic.Pointer[bool]
 }
 
-func NewHealthHandler(sr map[string]Checker, log *zap.Logger, usc int) *Health {
+func NewHealthHandler(sr map[string]Checker, shutdownInitiated *atomic.Pointer[bool], log *zap.Logger, usc int) *Health {
 	return &Health{
 		statusRegistry:        sr,
 		unavailableStatusCode: usc,
 		log:                   log,
+		shutdownInitiated:     shutdownInitiated,
 	}
 }
 
 func (rd *Health) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if rd.shutdownInitiated != nil && *rd.shutdownInitiated.Load() {
+		http.Error(w, "service is shutting down", http.StatusServiceUnavailable)
+		return
+	}
+
 	if r == nil || r.URL == nil || r.URL.Query() == nil {
 		http.Error(
 			w,
