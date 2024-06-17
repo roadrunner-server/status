@@ -36,9 +36,8 @@ func TestStatusHttp(t *testing.T) {
 	cont := endure.New(slog.LevelDebug)
 
 	cfg := &config.Plugin{
-		Version: "2.9.0",
+		Version: "2024.1.0",
 		Path:    "configs/.rr-status-init.yaml",
-		Prefix:  "rr",
 	}
 
 	err := cont.RegisterAll(
@@ -104,9 +103,8 @@ func TestStatusRPC(t *testing.T) {
 	cont := endure.New(slog.LevelDebug)
 
 	cfg := &config.Plugin{
-		Version: "2.9.0",
+		Version: "2024.1.0",
 		Path:    "configs/.rr-status-init.yaml",
-		Prefix:  "rr",
 	}
 
 	err := cont.RegisterAll(
@@ -174,7 +172,7 @@ func TestReadyHttp(t *testing.T) {
 	cont := endure.New(slog.LevelDebug)
 
 	cfg := &config.Plugin{
-		Version: "2.9.0",
+		Version: "2024.1.0",
 		Path:    "configs/.rr-status-init.yaml",
 		Prefix:  "rr",
 	}
@@ -242,7 +240,7 @@ func TestReadinessRPCWorkerNotReady(t *testing.T) {
 	cont := endure.New(slog.LevelDebug, endure.GracefulShutdownTimeout(time.Second))
 
 	cfg := &config.Plugin{
-		Version: "2.9.0",
+		Version: "2024.1.0",
 		Path:    "configs/.rr-ready-init.yaml",
 		Prefix:  "rr",
 	}
