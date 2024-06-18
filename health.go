@@ -27,7 +27,7 @@ func NewHealthHandler(sr map[string]Checker, shutdownInitiated *atomic.Pointer[b
 
 func (rd *Health) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if rd.shutdownInitiated != nil && *rd.shutdownInitiated.Load() {
-		http.Error(w, "service is shutting down", http.StatusServiceUnavailable)
+		http.Error(w, "service is shutting down", http.StatusOK)
 		return
 	}
 

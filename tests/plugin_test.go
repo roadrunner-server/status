@@ -569,6 +569,15 @@ func TestShutdown503(t *testing.T) {
 	rsp, err := httpClient.Do(req)
 	require.NoError(t, err)
 
+	assert.Equal(t, http.StatusOK, rsp.StatusCode)
+
+	req, err = http.NewRequestWithContext(context.Background(), http.MethodGet, "http://127.0.0.1:34711/ready", nil)
+	assert.NoError(t, err)
+	require.NotNil(t, req)
+
+	rsp, err = httpClient.Do(req)
+	require.NoError(t, err)
+
 	assert.Equal(t, http.StatusServiceUnavailable, rsp.StatusCode)
 
 	wg.Wait()
