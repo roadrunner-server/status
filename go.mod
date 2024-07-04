@@ -1,9 +1,9 @@
-module github.com/roadrunner-server/status/v4
+module github.com/roadrunner-server/status/v5
 
-go 1.22.4
+go 1.22.5
 
 require (
-	github.com/roadrunner-server/api/v4 v4.12.0
+	github.com/roadrunner-server/api/v4 v4.15.0
 	github.com/roadrunner-server/endure/v2 v2.4.5
 	github.com/roadrunner-server/errors v1.4.0
 	go.uber.org/zap v1.27.0

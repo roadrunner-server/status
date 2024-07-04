@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/roadrunner-server/api/v4/plugins/v1/status"
-	jobsApi "github.com/roadrunner-server/api/v4/plugins/v3/jobs"
+	jobsApi "github.com/roadrunner-server/api/v4/plugins/v4/jobs"
 	"github.com/roadrunner-server/endure/v2/dep"
 	"github.com/roadrunner-server/errors"
 	"go.uber.org/zap"
@@ -33,7 +33,7 @@ type Logger interface {
 	NamedLogger(name string) *zap.Logger
 }
 
-// Checker interface used to get the latest status from plugin
+// Checker interface used to get the latest status from the plugin
 type Checker interface {
 	Status() (*status.Status, error)
 	Name() string
