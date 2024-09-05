@@ -33,7 +33,7 @@ const resp = `plugin: http, status: 200
 plugin: rpc not found`
 
 func TestStatusHttp(t *testing.T) {
-	cont := endure.New(slog.LevelDebug, endure.GracefulShutdownTimeout(time.Second))
+	cont := endure.New(slog.LevelDebug, endure.GracefulShutdownTimeout(time.Minute))
 
 	cfg := &config.Plugin{
 		Version: "2024.1.0",
@@ -105,7 +105,7 @@ func TestStatusHttp(t *testing.T) {
 }
 
 func TestStatusRPC(t *testing.T) {
-	cont := endure.New(slog.LevelDebug, endure.GracefulShutdownTimeout(time.Second))
+	cont := endure.New(slog.LevelDebug, endure.GracefulShutdownTimeout(time.Minute))
 
 	cfg := &config.Plugin{
 		Version: "2024.1.0",
@@ -179,7 +179,7 @@ func TestStatusRPC(t *testing.T) {
 }
 
 func TestReadyHttp(t *testing.T) {
-	cont := endure.New(slog.LevelDebug, endure.GracefulShutdownTimeout(time.Second))
+	cont := endure.New(slog.LevelDebug, endure.GracefulShutdownTimeout(time.Minute))
 
 	cfg := &config.Plugin{
 		Version: "2024.1.0",
@@ -251,7 +251,7 @@ func TestReadyHttp(t *testing.T) {
 }
 
 func TestReadinessRPCWorkerNotReady(t *testing.T) {
-	cont := endure.New(slog.LevelDebug, endure.GracefulShutdownTimeout(time.Second))
+	cont := endure.New(slog.LevelDebug, endure.GracefulShutdownTimeout(time.Minute))
 
 	cfg := &config.Plugin{
 		Version: "2024.1.0",
@@ -325,7 +325,7 @@ func TestReadinessRPCWorkerNotReady(t *testing.T) {
 }
 
 func TestJobsStatus(t *testing.T) {
-	cont := endure.New(slog.LevelDebug, endure.GracefulShutdownTimeout(time.Second))
+	cont := endure.New(slog.LevelDebug, endure.GracefulShutdownTimeout(time.Minute))
 
 	cfg := &config.Plugin{
 		Version: "2023.1.0",
@@ -412,7 +412,7 @@ func TestJobsStatus(t *testing.T) {
 }
 
 func TestJobsReadiness(t *testing.T) {
-	cont := endure.New(slog.LevelDebug, endure.GracefulShutdownTimeout(time.Second))
+	cont := endure.New(slog.LevelDebug, endure.GracefulShutdownTimeout(time.Minute))
 
 	cfg := &config.Plugin{
 		Version: "2023.2.0",

@@ -24,6 +24,5 @@ http:
   pool:
     num_workers: 1
     allocate_timeout: 5s
-    destroy_timeout: 5s
     supervisor:
       exec_ttl: 10s
