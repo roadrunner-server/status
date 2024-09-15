@@ -33,12 +33,12 @@ func (rd *Ready) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// report will be used either for all plugin or for the Plugins in the query
+	// report will be used either for all plugins or for the Plugins in the query
 	report := make([]*Report, 0, 2)
 
-	pl := r.URL.Query()[pluginsQuery]
+	plg := r.URL.Query()[pluginsQuery]
 	// if no Plugins provided, check them all
-	if len(pl) == 0 {
+	if len(plg) == 0 {
 		for k, pl := range rd.statusRegistry {
 			if pl == nil {
 				report = append(report, &Report{
@@ -103,23 +103,26 @@ func (rd *Ready) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// write the response
-		_, _ = w.Write(data)
+		_, err = w.Write(data)
+		if err != nil {
+			rd.log.Error("failed to write response", zap.Error(err))
+		}
 
 		return
 	}
 
 	// iterate over all provided Plugins
-	for i := 0; i < len(pl); i++ {
-		if svc, ok := rd.statusRegistry[pl[i]]; ok {
+	for i := 0; i < len(plg); i++ {
+		if svc, ok := rd.statusRegistry[plg[i]]; ok {
 			if svc == nil {
 				continue
 			}
 
-			st, err := rd.statusRegistry[pl[i]].Ready()
+			st, err := rd.statusRegistry[plg[i]].Ready()
 			if err != nil {
 				w.WriteHeader(rd.unavailableStatusCode)
 				report = append(report, &Report{
-					PluginName:   pl[i],
+					PluginName:   plg[i],
 					ErrorMessage: err.Error(),
 					StatusCode:   http.StatusInternalServerError,
 				})
@@ -128,7 +131,7 @@ func (rd *Ready) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 			if st == nil {
 				report = append(report, &Report{
-					PluginName:   pl[i],
+					PluginName:   plg[i],
 					ErrorMessage: "plugin is not available",
 					StatusCode:   rd.unavailableStatusCode,
 				})
@@ -140,24 +143,24 @@ func (rd *Ready) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				// on >=500, write header, because it'll be written on Write (200)
 				w.WriteHeader(rd.unavailableStatusCode)
 				report = append(report, &Report{
-					PluginName:   pl[i],
+					PluginName:   plg[i],
 					ErrorMessage: "internal server error, see logs",
 					StatusCode:   rd.unavailableStatusCode,
 				})
 			case st.Code >= 100 && st.Code <= 400:
 				report = append(report, &Report{
-					PluginName: pl[i],
+					PluginName: plg[i],
 					StatusCode: st.Code,
 				})
 			default:
 				report = append(report, &Report{
-					PluginName:   pl[i],
+					PluginName:   plg[i],
 					ErrorMessage: "unexpected status code",
 					StatusCode:   st.Code,
 				})
 			}
 		} else {
-			rd.log.Info("plugin does not support readiness checks", zap.String("plugin", pl[i]))
+			rd.log.Info("plugin does not support readiness checks", zap.String("plugin", plg[i]))
 		}
 	}
 
@@ -167,5 +170,8 @@ func (rd *Ready) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// write the response
-	_, _ = w.Write(data)
+	_, err = w.Write(data)
+	if err != nil {
+		rd.log.Error("failed to write response", zap.Error(err))
+	}
 }

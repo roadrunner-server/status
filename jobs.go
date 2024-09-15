@@ -42,7 +42,7 @@ func (jb *Jobs) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 
-	report := make([]*JobsReport, 0, 2)
+	report := make([]*JobsReport, 0, len(jobStates))
 
 	// write info about underlying drivers
 	for i := 0; i < len(jobStates); i++ {
@@ -65,5 +65,8 @@ func (jb *Jobs) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 
-	_, _ = w.Write(data)
+	_, err = w.Write(data)
+	if err != nil {
+		jb.log.Error("failed to write jobs state report", zap.Error(err))
+	}
 }
