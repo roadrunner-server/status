@@ -19,7 +19,6 @@ const (
 	// PluginName declares public plugin name.
 	PluginName          = "status"
 	pluginsQuery string = "plugin"
-	template     string = "plugin: %s, status: %d\n"
 )
 
 type Configurer interface {
