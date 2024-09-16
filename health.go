@@ -1,8 +1,7 @@
 package status
 
 import (
-	"fmt"
-	"html"
+	"encoding/json"
 	"net/http"
 	"sync/atomic"
 
@@ -31,58 +30,146 @@ func (rd *Health) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r == nil || r.URL == nil || r.URL.Query() == nil {
-		http.Error(
-			w,
-			"No plugins provided in query. Query should be in form of: health?plugin=plugin1&plugin=plugin2",
-			http.StatusBadRequest,
-		)
-		return
-	}
+	// report will be used either for all plugins or for the Plugins in the query
+	report := make([]*Report, 0, 2)
 
-	pl := r.URL.Query()[pluginsQuery]
+	plg := r.URL.Query()[pluginsQuery]
+	// if no Plugins provided, check them all
+	if len(plg) == 0 {
+		rd.log.Debug("no plugins provided, checking all plugins")
 
-	if len(pl) == 0 {
-		http.Error(
-			w,
-			"No plugins provided in query. Query should be in form of: health?plugin=plugin1&plugin=plugin2",
-			http.StatusBadRequest,
-		)
-		return
-	}
+		for k, pl := range rd.statusRegistry {
+			if pl == nil {
+				report = append(report, &Report{
+					PluginName:   k,
+					ErrorMessage: "plugin is nil or not initialized",
+					StatusCode:   http.StatusNotFound,
+				})
 
-	// iterate over all provided plugins
-	for i := 0; i < len(pl); i++ {
-		switch {
-		// check workers for the plugin
-		case rd.statusRegistry[pl[i]] != nil:
-			st, errS := rd.statusRegistry[pl[i]].Status()
-			if errS != nil {
-				http.Error(w, errS.Error(), rd.unavailableStatusCode)
-				return
+				rd.log.Info("plugin is nil or not initialized", zap.String("plugin", k))
+				continue
+			}
+
+			st, err := pl.Status()
+			if err != nil {
+				w.WriteHeader(rd.unavailableStatusCode)
+				report = append(report, &Report{
+					PluginName:   k,
+					ErrorMessage: err.Error(),
+					StatusCode:   rd.unavailableStatusCode,
+				})
+				continue
 			}
 
 			if st == nil {
-				w.WriteHeader(rd.unavailableStatusCode)
-				// nil can be only if the service unavailable
-				_, _ = w.Write([]byte(fmt.Sprintf(template, html.EscapeString(pl[i]), rd.unavailableStatusCode)))
-				return
+				report = append(report, &Report{
+					PluginName:   k,
+					ErrorMessage: "plugin is not available, returned nil",
+					StatusCode:   rd.unavailableStatusCode,
+				})
+				continue
 			}
 
 			switch {
 			case st.Code >= 500:
 				w.WriteHeader(rd.unavailableStatusCode)
-				// if there is 500 or 503 status code return immediately
-				_, _ = w.Write([]byte(fmt.Sprintf(template, html.EscapeString(pl[i]), rd.unavailableStatusCode)))
-				return
+
+				report = append(report, &Report{
+					PluginName:   k,
+					ErrorMessage: "internal server error, see logs",
+					StatusCode:   rd.unavailableStatusCode,
+				})
 			case st.Code >= 100 && st.Code <= 400:
-				_, _ = w.Write([]byte(fmt.Sprintf(template, html.EscapeString(pl[i]), st.Code)))
-				continue
+				report = append(report, &Report{
+					PluginName: k,
+					StatusCode: st.Code,
+				})
 			default:
-				_, _ = w.Write([]byte(fmt.Sprintf("plugin: %s not found", html.EscapeString(pl[i]))))
+				report = append(report, &Report{
+					PluginName:   k,
+					ErrorMessage: "unexpected status code",
+					StatusCode:   st.Code,
+				})
 			}
-		default:
-			_, _ = w.Write([]byte(fmt.Sprintf("plugin: %s not found", html.EscapeString(pl[i]))))
 		}
+
+		data, err := json.Marshal(report)
+		if err != nil {
+			// TODO do we need to write this error to the ResponseWriter?
+			rd.log.Error("failed to marshal response", zap.Error(err))
+			return
+		}
+		// write the response
+		_, err = w.Write(data)
+		if err != nil {
+			rd.log.Error("failed to write response", zap.Error(err))
+		}
+
+		return
+	}
+
+	// iterate over all provided Plugins
+	for i := 0; i < len(plg); i++ {
+		if svc, ok := rd.statusRegistry[plg[i]]; ok {
+			if svc == nil {
+				continue
+			}
+
+			st, err := rd.statusRegistry[plg[i]].Status()
+			if err != nil {
+				report = append(report, &Report{
+					PluginName:   plg[i],
+					ErrorMessage: err.Error(),
+					StatusCode:   http.StatusInternalServerError,
+				})
+
+				continue
+			}
+
+			if st == nil {
+				report = append(report, &Report{
+					PluginName:   plg[i],
+					ErrorMessage: "plugin is not available",
+					StatusCode:   rd.unavailableStatusCode,
+				})
+
+				continue
+			}
+
+			switch {
+			case st.Code >= 500:
+				// on >=500, write header, because it'll be written on Write (200)
+				w.WriteHeader(rd.unavailableStatusCode)
+				report = append(report, &Report{
+					PluginName:   plg[i],
+					ErrorMessage: "internal server error, see logs",
+					StatusCode:   rd.unavailableStatusCode,
+				})
+			case st.Code >= 100 && st.Code <= 400:
+				report = append(report, &Report{
+					PluginName: plg[i],
+					StatusCode: st.Code,
+				})
+			default:
+				report = append(report, &Report{
+					PluginName:   plg[i],
+					ErrorMessage: "unexpected status code",
+					StatusCode:   st.Code,
+				})
+			}
+		} else {
+			rd.log.Info("plugin does not support health checks", zap.String("plugin", plg[i]))
+		}
+	}
+
+	data, err := json.Marshal(report)
+	if err != nil {
+		rd.log.Error("failed to marshal response", zap.Error(err))
+	}
+
+	// write the response
+	_, err = w.Write(data)
+	if err != nil {
+		rd.log.Error("failed to write response", zap.Error(err))
 	}
 }

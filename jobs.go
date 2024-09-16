@@ -2,16 +2,11 @@ package status
 
 import (
 	"context"
-	"fmt"
-	"html"
+	"encoding/json"
 	"net/http"
 	"sync/atomic"
 
 	"go.uber.org/zap"
-)
-
-const (
-	jobsTemplate string = "plugin: %s: pipeline: %s | priority: %d | ready: %t | queue: %s | active: %d | delayed: %d | reserved: %d | driver: %s | error: %s \n"
 )
 
 type Jobs struct {
@@ -47,19 +42,31 @@ func (jb *Jobs) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 
+	report := make([]*JobsReport, 0, len(jobStates))
+
 	// write info about underlying drivers
 	for i := 0; i < len(jobStates); i++ {
-		_, _ = w.Write([]byte(html.EscapeString(fmt.Sprintf(jobsTemplate,
-			"jobs", // only JOBS plugin
-			jobStates[i].Pipeline,
-			jobStates[i].Priority,
-			jobStates[i].Ready,
-			jobStates[i].Queue,
-			jobStates[i].Active,
-			jobStates[i].Delayed,
-			jobStates[i].Reserved,
-			jobStates[i].Driver,
-			jobStates[i].ErrorMessage,
-		))))
+		report = append(report, &JobsReport{
+			Pipeline:     jobStates[i].Pipeline,
+			Priority:     jobStates[i].Priority,
+			Ready:        jobStates[i].Ready,
+			Queue:        jobStates[i].Queue,
+			Active:       jobStates[i].Active,
+			Delayed:      jobStates[i].Delayed,
+			Reserved:     jobStates[i].Reserved,
+			Driver:       jobStates[i].Driver,
+			ErrorMessage: jobStates[i].ErrorMessage,
+		})
+	}
+
+	data, err := json.Marshal(report)
+	if err != nil {
+		jb.log.Error("failed to marshal jobs state report", zap.Error(err))
+		return
+	}
+
+	_, err = w.Write(data)
+	if err != nil {
+		jb.log.Error("failed to write jobs state report", zap.Error(err))
 	}
 }
