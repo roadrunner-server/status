@@ -101,8 +101,8 @@ func (c *Plugin) Serve() chan error {
 		Addr:                         c.cfg.Address,
 		Handler:                      mux,
 		DisableGeneralOptionsHandler: false,
-		ReadTimeout:                  time.Duration(c.cfg.HealthCheckTimeout) * time.Second,
-		ReadHeaderTimeout:            time.Duration(c.cfg.HealthCheckTimeout) * time.Second,
+		ReadTimeout:                  time.Duration(c.cfg.CheckTimeout) * time.Second,
+		ReadHeaderTimeout:            time.Duration(c.cfg.CheckTimeout) * time.Second,
 		WriteTimeout:                 time.Minute,
 		IdleTimeout:                  time.Minute,
 	}

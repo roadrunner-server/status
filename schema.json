@@ -10,7 +10,7 @@
   ],
   "properties": {
     "address": {
-      "description": "Host and port to listen on (eg.: `127.0.0.1:2114`). To query a plugin, pass its name as a query parameter called `plugin`, e.g. to check the `http` plugin, GET http://127.0.0.1:2114/health?plugin=http. You can query multiple plugins by appending multiple instances of the `plugin` parameter, e.g. GET http://127.0.0.1:2114/health?plugin=http&plugin=rpc.",
+      "description": "Host and port to listen on (eg.: `127.0.0.1:2114`). To query a plugin, pass its name as a query parameter called `plugin`, e.g. to check the `http` plugin, request `GET http://127.0.0.1:2114/health?plugin=http`. You can query multiple plugins by appending multiple instances of the `plugin` parameter, e.g. `GET http://127.0.0.1:2114/health?plugin=http&plugin=rpc`.",
       "type": "string",
       "minLength": 1,
       "examples": [
@@ -24,8 +24,8 @@
       "maximum": 599,
       "default": 503
     },
-    "health_check_timeout": {
-      "description": "The time to wait for a complete response from the internal health endpoint. Defaults to 60.",
+    "check_timeout": {
+      "description": "The maximum duration to wait for a complete response from the queried plugin(s), in seconds. Defaults to 60.",
       "type": "integer",
       "minimum": 1,
       "default": 60
