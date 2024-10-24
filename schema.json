@@ -1,0 +1,34 @@
+{
+  "$id": "https://raw.githubusercontent.com/roadrunner-server/status/refs/heads/master/schema.json",
+  "$schema": "https://json-schema.org/draft/2019-09/schema",
+  "description": "All the valid configuration parameters for the Health Check (Status) plugin for RoadRunner.",
+  "type": "object",
+  "title": "roadrunner-status",
+  "additionalProperties": false,
+  "required": [
+    "address"
+  ],
+  "properties": {
+    "address": {
+      "description": "Host and port to listen on (eg.: `127.0.0.1:2114`). To query a plugin, pass its name as a query parameter called `plugin`, e.g. to check the `http` plugin, GET http://127.0.0.1:2114/health?plugin=http. You can query multiple plugins by appending multiple instances of the `plugin` parameter, e.g. GET http://127.0.0.1:2114/health?plugin=http&plugin=rpc.",
+      "type": "string",
+      "minLength": 1,
+      "examples": [
+        "127.0.0.1:2114"
+      ]
+    },
+    "unavailable_status_code": {
+      "description": "Response HTTP status code if a requested plugin is not ready to handle requests. Valid for both /health and /ready endpoints. Defaults to 503 if undefined or zero.",
+      "type": "integer",
+      "minimum": 100,
+      "maximum": 599,
+      "default": 503
+    },
+    "health_check_timeout": {
+      "description": "The time to wait for a complete response from the internal health endpoint. Defaults to 60.",
+      "type": "integer",
+      "minimum": 1,
+      "default": 60
+    }
+  }
+}
