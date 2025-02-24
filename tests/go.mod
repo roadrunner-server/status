@@ -6,7 +6,7 @@ toolchain go1.24.0
 
 require (
 	github.com/roadrunner-server/api/v4 v4.18.1
-	github.com/roadrunner-server/config/v5 v5.1.4
+	github.com/roadrunner-server/config/v5 v5.1.5
 	github.com/roadrunner-server/endure/v2 v2.6.1
 	github.com/roadrunner-server/goridge/v3 v3.8.3
 	github.com/roadrunner-server/http/v5 v5.2.3
@@ -61,9 +61,9 @@ require (
 	github.com/roadrunner-server/context v1.0.2 // indirect
 	github.com/roadrunner-server/errors v1.4.1 // indirect
 	github.com/roadrunner-server/events v1.0.1 // indirect
-	github.com/roadrunner-server/pool v1.1.2 // indirect
+	github.com/roadrunner-server/pool v1.1.3 // indirect
 	github.com/roadrunner-server/priority_queue v1.0.2 // indirect
-	github.com/roadrunner-server/tcplisten v1.5.1 // indirect
+	github.com/roadrunner-server/tcplisten v1.5.2 // indirect
 	github.com/sagikazarmark/locafero v0.7.0 // indirect
 	github.com/sagikazarmark/slog-shim v0.1.0 // indirect
 	github.com/shirou/gopsutil v3.21.11+incompatible // indirect
