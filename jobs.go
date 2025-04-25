@@ -45,7 +45,7 @@ func (jb *Jobs) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 	report := make([]*JobsReport, 0, len(jobStates))
 
 	// write info about underlying drivers
-	for i := 0; i < len(jobStates); i++ {
+	for i := range jobStates {
 		report = append(report, &JobsReport{
 			Pipeline:     jobStates[i].Pipeline,
 			Priority:     jobStates[i].Priority,

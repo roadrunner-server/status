@@ -109,7 +109,7 @@ func (rd *Health) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// iterate over all provided Plugins
-	for i := 0; i < len(plg); i++ {
+	for i := range plg {
 		if svc, ok := rd.statusRegistry[plg[i]]; ok {
 			if svc == nil {
 				continue
