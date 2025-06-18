@@ -6,15 +6,15 @@ toolchain go1.24.0
 
 require (
 	github.com/roadrunner-server/api/v4 v4.20.0
-	github.com/roadrunner-server/config/v5 v5.1.7
+	github.com/roadrunner-server/config/v5 v5.1.8
 	github.com/roadrunner-server/endure/v2 v2.6.2
 	github.com/roadrunner-server/goridge/v3 v3.8.3
-	github.com/roadrunner-server/http/v5 v5.2.6
-	github.com/roadrunner-server/jobs/v5 v5.1.7
-	github.com/roadrunner-server/logger/v5 v5.1.7
-	github.com/roadrunner-server/memory/v5 v5.2.7
-	github.com/roadrunner-server/rpc/v5 v5.1.7
-	github.com/roadrunner-server/server/v5 v5.2.8
+	github.com/roadrunner-server/http/v5 v5.2.7
+	github.com/roadrunner-server/jobs/v5 v5.1.8
+	github.com/roadrunner-server/logger/v5 v5.1.8
+	github.com/roadrunner-server/memory/v5 v5.2.8
+	github.com/roadrunner-server/rpc/v5 v5.1.8
+	github.com/roadrunner-server/server/v5 v5.2.9
 	github.com/roadrunner-server/status/v5 v5.0.0
 	github.com/stretchr/testify v1.10.0
 )
@@ -34,7 +34,7 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/go-task/slim-sprig/v3 v3.0.0 // indirect
-	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
+	github.com/go-viper/mapstructure/v2 v2.3.0 // indirect
 	github.com/goccy/go-json v0.10.5 // indirect
 	github.com/google/pprof v0.0.0-20250607225305-033d6d78b36a // indirect
 	github.com/google/uuid v1.6.0 // indirect
@@ -60,7 +60,7 @@ require (
 	github.com/roadrunner-server/errors v1.4.1 // indirect
 	github.com/roadrunner-server/events v1.0.1 // indirect
 	github.com/roadrunner-server/pool v1.1.3 // indirect
-	github.com/roadrunner-server/priority_queue v1.0.4 // indirect
+	github.com/roadrunner-server/priority_queue v1.0.5 // indirect
 	github.com/roadrunner-server/tcplisten v1.5.2 // indirect
 	github.com/sagikazarmark/locafero v0.9.0 // indirect
 	github.com/shirou/gopsutil v3.21.11+incompatible // indirect
