@@ -8,8 +8,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/roadrunner-server/api/v4/plugins/v1/status"
-	jobsApi "github.com/roadrunner-server/api/v4/plugins/v4/jobs"
+	jobsApi "github.com/roadrunner-server/api-plugins/v6/jobs"
+	"github.com/roadrunner-server/api-plugins/v6/status"
 	"github.com/roadrunner-server/endure/v2/dep"
 	"github.com/roadrunner-server/errors"
 	"go.uber.org/zap"
@@ -81,7 +81,7 @@ func (c *Plugin) Init(cfg Configurer, log Logger) error {
 
 	c.readyRegistry = make(map[string]Readiness)
 	c.statusRegistry = make(map[string]Checker)
-	c.shutdownInitiated.Store(toPtr(false))
+	c.shutdownInitiated.Store(new(false))
 
 	c.log = log.NamedLogger(PluginName)
 
@@ -127,7 +127,7 @@ func (c *Plugin) Stop(_ context.Context) error {
 	defer c.mu.Unlock()
 
 	// set shutdown to true, thus all endpoints will return 503
-	c.shutdownInitiated.Store(toPtr(true))
+	c.shutdownInitiated.Store(new(true))
 
 	return nil
 }
@@ -191,8 +191,4 @@ func (c *Plugin) Name() string {
 // RPC returns associated rpc service.
 func (c *Plugin) RPC() any {
 	return &rpc{srv: c, log: c.log}
-}
-
-func toPtr[T any](v T) *T {
-	return &v
 }

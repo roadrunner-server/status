@@ -33,6 +33,7 @@ func (jb *Jobs) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 
 	if jb.statusJobsRegistry == nil {
 		http.Error(w, "jobs plugin not found", jb.unavailableStatusCode)
+		return
 	}
 
 	jobStates, err := jb.statusJobsRegistry.JobsState(context.Background())

@@ -1,7 +1,7 @@
 package status
 
 import (
-	statusV1 "github.com/roadrunner-server/api/v4/build/status/v1"
+	statusV2 "github.com/roadrunner-server/api-go/v6/status/v2"
 	"github.com/roadrunner-server/errors"
 	"go.uber.org/zap"
 )
@@ -12,7 +12,7 @@ type rpc struct {
 }
 
 // Status returns the current status of the provided plugin
-func (rpc *rpc) Status(req *statusV1.Request, resp *statusV1.Response) error {
+func (rpc *rpc) Status(req *statusV2.StatusRequest, resp *statusV2.StatusResponse) error {
 	const op = errors.Op("checker_rpc_status")
 	rpc.log.Debug("Status method was invoked", zap.String("plugin", req.GetPlugin()))
 	st, err := rpc.srv.status(req.GetPlugin())
@@ -31,7 +31,7 @@ func (rpc *rpc) Status(req *statusV1.Request, resp *statusV1.Response) error {
 }
 
 // Ready to return the readiness check of the provided plugin
-func (rpc *rpc) Ready(req *statusV1.Request, resp *statusV1.Response) error {
+func (rpc *rpc) Ready(req *statusV2.StatusRequest, resp *statusV2.StatusResponse) error {
 	const op = errors.Op("checker_rpc_ready")
 	rpc.log.Debug("Ready method was invoked", zap.String("plugin", req.GetPlugin()))
 	st, err := rpc.srv.ready(req.GetPlugin())
