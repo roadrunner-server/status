@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	statusv1beta1 "github.com/roadrunner-server/api/v4/build/status/v1"
+	statusv2 "github.com/roadrunner-server/api-go/v6/status/v2"
 	"github.com/roadrunner-server/config/v5"
 	"github.com/roadrunner-server/endure/v2"
 	goridgeRpc "github.com/roadrunner-server/goridge/v3/pkg/rpc"
@@ -613,8 +613,25 @@ func TestShutdown503(t *testing.T) {
 
 	rsp, err = httpClient.Do(req)
 	require.NoError(t, err)
+	require.NotNil(t, rsp)
 
 	assert.Equal(t, http.StatusServiceUnavailable, rsp.StatusCode)
+	if rsp != nil {
+		_ = rsp.Body.Close()
+	}
+
+	// Also verify /jobs returns 503 during shutdown
+	req, err = http.NewRequestWithContext(context.Background(), http.MethodGet, "http://127.0.0.1:34711/jobs", nil)
+	assert.NoError(t, err)
+	require.NotNil(t, req)
+
+	rsp, err = httpClient.Do(req)
+	require.NoError(t, err)
+
+	b, err := io.ReadAll(rsp.Body)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusServiceUnavailable, rsp.StatusCode)
+	assert.Contains(t, string(b), "service is shutting down")
 
 	wg.Wait()
 
@@ -623,6 +640,103 @@ func TestShutdown503(t *testing.T) {
 			_ = rsp.Body.Close()
 		}
 
+		sp.StopHTTPServer()
+	})
+}
+
+func TestRPCNonExistentPlugin(t *testing.T) {
+	cont := endure.New(slog.LevelDebug, endure.GracefulShutdownTimeout(time.Minute))
+
+	cfg := &config.Plugin{
+		Version: "2024.1.0",
+		Path:    "configs/.rr-status-init.yaml",
+	}
+
+	sp := &status.Plugin{}
+	err := cont.RegisterAll(
+		cfg,
+		&rpcPlugin.Plugin{},
+		&logger.Plugin{},
+		&server.Plugin{},
+		&httpPlugin.Plugin{},
+		sp,
+	)
+	assert.NoError(t, err)
+
+	err = cont.Init()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ch, err := cont.Serve()
+	assert.NoError(t, err)
+
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+
+	stopCh := make(chan struct{}, 1)
+
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case e := <-ch:
+				assert.Fail(t, "error", e.Error.Error())
+				err = cont.Stop()
+				if err != nil {
+					assert.FailNow(t, "error", err.Error())
+				}
+			case <-sig:
+				err = cont.Stop()
+				if err != nil {
+					assert.FailNow(t, "error", err.Error())
+				}
+				return
+			case <-stopCh:
+				err = cont.Stop()
+				if err != nil {
+					assert.FailNow(t, "error", err.Error())
+				}
+				return
+			}
+		}
+	}()
+
+	time.Sleep(time.Second)
+
+	t.Run("StatusNonExistent", func(t *testing.T) {
+		conn, err := net.Dial("tcp", "127.0.0.1:6005")
+		require.NoError(t, err)
+		client := rpc.NewClientWithCodec(goridgeRpc.NewClientCodec(conn))
+
+		req := &statusv2.StatusRequest{Plugin: "nonexistent"}
+		rsp := &statusv2.StatusResponse{}
+
+		err = client.Call("status.Status", req, rsp)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "no such plugin")
+	})
+
+	t.Run("ReadyNonExistent", func(t *testing.T) {
+		conn, err := net.Dial("tcp", "127.0.0.1:6005")
+		require.NoError(t, err)
+		client := rpc.NewClientWithCodec(goridgeRpc.NewClientCodec(conn))
+
+		req := &statusv2.StatusRequest{Plugin: "nonexistent"}
+		rsp := &statusv2.StatusResponse{}
+
+		err = client.Call("status.Ready", req, rsp)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "no such plugin")
+	})
+
+	stopCh <- struct{}{}
+	wg.Wait()
+
+	t.Cleanup(func() {
 		sp.StopHTTPServer()
 	})
 }
@@ -771,11 +885,11 @@ func checkRPCReadiness(t *testing.T, plugin string, status int64, port string) {
 	assert.NoError(t, err)
 	client := rpc.NewClientWithCodec(goridgeRpc.NewClientCodec(conn))
 
-	req := &statusv1beta1.Request{
+	req := &statusv2.StatusRequest{
 		Plugin: plugin,
 	}
 
-	rsp := &statusv1beta1.Response{}
+	rsp := &statusv2.StatusResponse{}
 
 	err = client.Call("status.Ready", req, rsp)
 	assert.NoError(t, err)
@@ -787,11 +901,11 @@ func checkRPCStatus(t *testing.T, plugin string, status int64, port string) {
 	assert.NoError(t, err)
 	client := rpc.NewClientWithCodec(goridgeRpc.NewClientCodec(conn))
 
-	req := &statusv1beta1.Request{
+	req := &statusv2.StatusRequest{
 		Plugin: plugin,
 	}
 
-	rsp := &statusv1beta1.Response{}
+	rsp := &statusv2.StatusResponse{}
 
 	err = client.Call("status.Status", req, rsp)
 	assert.NoError(t, err)

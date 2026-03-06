@@ -8,8 +8,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/roadrunner-server/api/v4/plugins/v1/status"
-	jobsApi "github.com/roadrunner-server/api/v4/plugins/v4/jobs"
+	jobsApi "github.com/roadrunner-server/api-plugins/v6/jobs"
+	"github.com/roadrunner-server/api-plugins/v6/status"
 	"github.com/roadrunner-server/endure/v2/dep"
 	"github.com/roadrunner-server/errors"
 	"go.uber.org/zap"
