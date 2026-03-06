@@ -94,6 +94,22 @@ func TestStatusHttp(t *testing.T) {
 	time.Sleep(time.Second)
 	t.Run("CheckerGetStatus", checkHTTPStatus)
 	t.Run("CheckerGetStatusAll", checkHTTPStatusAll)
+	t.Run("JobsEndpointWithoutPlugin", func(t *testing.T) {
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://127.0.0.1:34333/jobs", nil)
+		assert.NoError(t, err)
+
+		r, err := http.DefaultClient.Do(req)
+		assert.NoError(t, err)
+		require.NotNil(t, r)
+
+		b, err := io.ReadAll(r.Body)
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusServiceUnavailable, r.StatusCode)
+		assert.Contains(t, string(b), "jobs plugin not found")
+
+		err = r.Body.Close()
+		assert.NoError(t, err)
+	})
 
 	stopCh <- struct{}{}
 	wg.Wait()
