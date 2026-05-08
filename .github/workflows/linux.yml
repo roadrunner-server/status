@@ -70,7 +70,7 @@ jobs:
         run: |
           cd tests
           mkdir ./coverage-ci
-          go test -timeout 20m -v -race -cover -tags=debug -failfast -coverpkg=$(cat pkgs.txt) -coverprofile=./coverage-ci/status.out -covermode=atomic ./...
+          go test -timeout 20m -v -race -cover -tags=debug -failfast -coverpkg=./... -coverprofile=./coverage-ci/status.out -covermode=atomic ./...
 
       - name: Archive code coverage results
         uses: actions/upload-artifact@v7
@@ -97,8 +97,8 @@ jobs:
           tail -q -n +2 coverage/*.out >> summary.txt
           awk '
             NR == 1 { print; next }
-            /^github\.com\/roadrunner-server\/status\/v5\// {
-              sub(/^github\.com\/roadrunner-server\/status\/v5\//, "", $0)
+            /^github\.com\/roadrunner-server\/status\/v6\// {
+              sub(/^github\.com\/roadrunner-server\/status\/v6\//, "", $0)
               print
             }
           ' summary.txt > summary.filtered.txt
