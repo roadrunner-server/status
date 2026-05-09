@@ -1,9 +1,10 @@
 package status
 
 import (
+	"log/slog"
+
 	statusV2 "github.com/roadrunner-server/api-go/v6/status/v2"
 	"github.com/roadrunner-server/errors"
-	"log/slog"
 )
 
 type rpc struct {
