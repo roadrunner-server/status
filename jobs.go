@@ -3,20 +3,19 @@ package status
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"sync/atomic"
-
-	"go.uber.org/zap"
 )
 
 type Jobs struct {
 	statusJobsRegistry    JobsChecker
 	unavailableStatusCode int
-	log                   *zap.Logger
+	log                   *slog.Logger
 	shutdownInitiated     *atomic.Pointer[bool]
 }
 
-func NewJobsHandler(jc JobsChecker, shutdownInitiated *atomic.Pointer[bool], log *zap.Logger, usc int) *Jobs {
+func NewJobsHandler(jc JobsChecker, shutdownInitiated *atomic.Pointer[bool], log *slog.Logger, usc int) *Jobs {
 	return &Jobs{
 		statusJobsRegistry:    jc,
 		unavailableStatusCode: usc,
@@ -38,7 +37,7 @@ func (jb *Jobs) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 
 	jobStates, err := jb.statusJobsRegistry.JobsState(context.Background())
 	if err != nil {
-		jb.log.Error("jobs state", zap.Error(err))
+		jb.log.Error("jobs state", "error", err)
 		http.Error(w, "jobs plugin not found", jb.unavailableStatusCode)
 		return
 	}
@@ -62,12 +61,12 @@ func (jb *Jobs) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 
 	data, err := json.Marshal(report)
 	if err != nil {
-		jb.log.Error("failed to marshal jobs state report", zap.Error(err))
+		jb.log.Error("failed to marshal jobs state report", "error", err)
 		return
 	}
 
 	_, err = w.Write(data)
 	if err != nil {
-		jb.log.Error("failed to write jobs state report", zap.Error(err))
+		jb.log.Error("failed to write jobs state report", "error", err)
 	}
 }

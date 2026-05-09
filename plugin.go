@@ -3,6 +3,7 @@ package status
 import (
 	"context"
 	stderr "errors"
+	"log/slog"
 	"net/http"
 	"sync"
 	"sync/atomic"
@@ -12,7 +13,6 @@ import (
 	"github.com/roadrunner-server/api-plugins/v6/status"
 	"github.com/roadrunner-server/endure/v2/dep"
 	"github.com/roadrunner-server/errors"
-	"go.uber.org/zap"
 )
 
 const (
@@ -29,7 +29,7 @@ type Configurer interface {
 }
 
 type Logger interface {
-	NamedLogger(name string) *zap.Logger
+	NamedLogger(name string) *slog.Logger
 }
 
 // Checker interface used to get the latest status from the plugin
@@ -62,7 +62,7 @@ type Plugin struct {
 	// shared pointer
 	shutdownInitiated atomic.Pointer[bool]
 	server            *http.Server
-	log               *zap.Logger
+	log               *slog.Logger
 	cfg               *Config
 }
 

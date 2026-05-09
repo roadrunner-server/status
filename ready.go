@@ -2,23 +2,22 @@ package status
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"sync/atomic"
-
-	"go.uber.org/zap"
 )
 
 // readiness Handler return 200OK if all Plugins are ready to serve
 // if one of the Plugins returns status from the 5xx range, the status for all queries will be 503
 
 type Ready struct {
-	log                   *zap.Logger
+	log                   *slog.Logger
 	unavailableStatusCode int
 	statusRegistry        map[string]Readiness
 	shutdownInitiated     *atomic.Pointer[bool]
 }
 
-func NewReadyHandler(sr map[string]Readiness, shutdownInitiated *atomic.Pointer[bool], log *zap.Logger, usc int) *Ready {
+func NewReadyHandler(sr map[string]Readiness, shutdownInitiated *atomic.Pointer[bool], log *slog.Logger, usc int) *Ready {
 	return &Ready{
 		log:                   log,
 		statusRegistry:        sr,
@@ -47,7 +46,7 @@ func (rd *Ready) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					StatusCode:   http.StatusNotFound,
 				})
 
-				rd.log.Info("plugin is nil or not initialized", zap.String("plugin", k))
+				rd.log.Info("plugin is nil or not initialized", "plugin", k)
 				continue
 			}
 
@@ -98,14 +97,14 @@ func (rd *Ready) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		data, err := json.Marshal(report)
 		if err != nil {
 			// TODO do we need to write this error to the ResponseWriter?
-			rd.log.Error("failed to marshal response", zap.Error(err))
+			rd.log.Error("failed to marshal response", "error", err)
 			return
 		}
 
 		// write the response
 		_, err = w.Write(data)
 		if err != nil {
-			rd.log.Error("failed to write response", zap.Error(err))
+			rd.log.Error("failed to write response", "error", err)
 		}
 
 		return
@@ -160,18 +159,18 @@ func (rd *Ready) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				})
 			}
 		} else {
-			rd.log.Info("plugin does not support readiness checks", zap.String("plugin", plg[i]))
+			rd.log.Info("plugin does not support readiness checks", "plugin", plg[i])
 		}
 	}
 
 	data, err := json.Marshal(report)
 	if err != nil {
-		rd.log.Error("failed to marshal response", zap.Error(err))
+		rd.log.Error("failed to marshal response", "error", err)
 	}
 
 	// write the response
 	_, err = w.Write(data)
 	if err != nil {
-		rd.log.Error("failed to write response", zap.Error(err))
+		rd.log.Error("failed to write response", "error", err)
 	}
 }

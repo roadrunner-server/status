@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -14,7 +15,6 @@ import (
 	apiStatus "github.com/roadrunner-server/api-plugins/v6/status"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 )
 
 // --- Mock implementations ---
@@ -72,7 +72,7 @@ func parseJobsReports(t *testing.T, body []byte) []*JobsReport {
 // --- Health Handler Tests ---
 
 func TestHealthHandler(t *testing.T) {
-	log := zap.NewNop()
+	log := slog.New(slog.DiscardHandler)
 
 	// ---- All-plugins path (no query params) ----
 
@@ -313,7 +313,7 @@ func TestHealthHandler(t *testing.T) {
 // --- Ready Handler Tests ---
 
 func TestReadyHandler(t *testing.T) {
-	log := zap.NewNop()
+	log := slog.New(slog.DiscardHandler)
 
 	// ---- All-plugins path (no query params) ----
 
@@ -555,7 +555,7 @@ func TestReadyHandler(t *testing.T) {
 // --- Jobs Handler Tests ---
 
 func TestJobsHandler(t *testing.T) {
-	log := zap.NewNop()
+	log := slog.New(slog.DiscardHandler)
 
 	t.Run("Shutdown", func(t *testing.T) {
 		h := NewJobsHandler(nil, newShutdownPtr(true), log, http.StatusServiceUnavailable)
@@ -641,7 +641,7 @@ func FuzzHealthPluginQuery(f *testing.F) {
 	registry := map[string]Checker{
 		"http": &mockChecker{name: "http", st: &apiStatus.Status{Code: 200}},
 	}
-	log := zap.NewNop()
+	log := slog.New(slog.DiscardHandler)
 	h := NewHealthHandler(registry, newShutdownPtr(false), log, http.StatusServiceUnavailable)
 
 	f.Fuzz(func(t *testing.T, query string) {
@@ -665,7 +665,7 @@ func FuzzReadyPluginQuery(f *testing.F) {
 	registry := map[string]Readiness{
 		"http": &mockReadiness{name: "http", st: &apiStatus.Status{Code: 200}},
 	}
-	log := zap.NewNop()
+	log := slog.New(slog.DiscardHandler)
 	h := NewReadyHandler(registry, newShutdownPtr(false), log, http.StatusServiceUnavailable)
 
 	f.Fuzz(func(t *testing.T, query string) {

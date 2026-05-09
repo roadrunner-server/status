@@ -2,20 +2,19 @@ package status
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"sync/atomic"
-
-	"go.uber.org/zap"
 )
 
 type Health struct {
-	log                   *zap.Logger
+	log                   *slog.Logger
 	unavailableStatusCode int
 	statusRegistry        map[string]Checker
 	shutdownInitiated     *atomic.Pointer[bool]
 }
 
-func NewHealthHandler(sr map[string]Checker, shutdownInitiated *atomic.Pointer[bool], log *zap.Logger, usc int) *Health {
+func NewHealthHandler(sr map[string]Checker, shutdownInitiated *atomic.Pointer[bool], log *slog.Logger, usc int) *Health {
 	return &Health{
 		statusRegistry:        sr,
 		unavailableStatusCode: usc,
@@ -46,7 +45,7 @@ func (rd *Health) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					StatusCode:   http.StatusNotFound,
 				})
 
-				rd.log.Info("plugin is nil or not initialized", zap.String("plugin", k))
+				rd.log.Info("plugin is nil or not initialized", "plugin", k)
 				continue
 			}
 
@@ -96,13 +95,13 @@ func (rd *Health) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		data, err := json.Marshal(report)
 		if err != nil {
 			// TODO do we need to write this error to the ResponseWriter?
-			rd.log.Error("failed to marshal response", zap.Error(err))
+			rd.log.Error("failed to marshal response", "error", err)
 			return
 		}
 		// write the response
 		_, err = w.Write(data)
 		if err != nil {
-			rd.log.Error("failed to write response", zap.Error(err))
+			rd.log.Error("failed to write response", "error", err)
 		}
 
 		return
@@ -158,18 +157,18 @@ func (rd *Health) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				})
 			}
 		} else {
-			rd.log.Info("plugin does not support health checks", zap.String("plugin", plg[i]))
+			rd.log.Info("plugin does not support health checks", "plugin", plg[i])
 		}
 	}
 
 	data, err := json.Marshal(report)
 	if err != nil {
-		rd.log.Error("failed to marshal response", zap.Error(err))
+		rd.log.Error("failed to marshal response", "error", err)
 	}
 
 	// write the response
 	_, err = w.Write(data)
 	if err != nil {
-		rd.log.Error("failed to write response", zap.Error(err))
+		rd.log.Error("failed to write response", "error", err)
 	}
 }

@@ -3,18 +3,18 @@ package status
 import (
 	statusV2 "github.com/roadrunner-server/api-go/v6/status/v2"
 	"github.com/roadrunner-server/errors"
-	"go.uber.org/zap"
+	"log/slog"
 )
 
 type rpc struct {
 	srv *Plugin
-	log *zap.Logger
+	log *slog.Logger
 }
 
 // Status returns the current status of the provided plugin
 func (rpc *rpc) Status(req *statusV2.StatusRequest, resp *statusV2.StatusResponse) error {
 	const op = errors.Op("checker_rpc_status")
-	rpc.log.Debug("Status method was invoked", zap.String("plugin", req.GetPlugin()))
+	rpc.log.Debug("Status method was invoked", "plugin", req.GetPlugin())
 	st, err := rpc.srv.status(req.GetPlugin())
 	if err != nil {
 		resp.Message = err.Error()
@@ -23,7 +23,7 @@ func (rpc *rpc) Status(req *statusV2.StatusRequest, resp *statusV2.StatusRespons
 
 	if st != nil {
 		resp.Code = int64(st.Code)
-		rpc.log.Debug("status code", zap.Int("code", st.Code))
+		rpc.log.Debug("status code", "code", st.Code)
 	}
 
 	rpc.log.Debug("successfully finished the Status method")
@@ -33,7 +33,7 @@ func (rpc *rpc) Status(req *statusV2.StatusRequest, resp *statusV2.StatusRespons
 // Ready to return the readiness check of the provided plugin
 func (rpc *rpc) Ready(req *statusV2.StatusRequest, resp *statusV2.StatusResponse) error {
 	const op = errors.Op("checker_rpc_ready")
-	rpc.log.Debug("Ready method was invoked", zap.String("plugin", req.GetPlugin()))
+	rpc.log.Debug("Ready method was invoked", "plugin", req.GetPlugin())
 	st, err := rpc.srv.ready(req.GetPlugin())
 	if err != nil {
 		resp.Message = err.Error()
@@ -42,7 +42,7 @@ func (rpc *rpc) Ready(req *statusV2.StatusRequest, resp *statusV2.StatusResponse
 
 	if st != nil {
 		resp.Code = int64(st.Code)
-		rpc.log.Debug("status code", zap.Int("code", st.Code))
+		rpc.log.Debug("status code", "code", st.Code)
 	}
 
 	rpc.log.Debug("successfully finished the Ready method")
