@@ -2,6 +2,7 @@ package status
 
 import (
 	"context"
+	stderr "errors"
 	"log/slog"
 
 	"connectrpc.com/connect"
@@ -14,19 +15,26 @@ type rpc struct {
 	log *slog.Logger
 }
 
+// connectCodeFor returns CodeNotFound for a missing plugin, CodeInternal otherwise.
+func connectCodeFor(err error) connect.Code {
+	if stderr.Is(err, errPluginNotFound) {
+		return connect.CodeNotFound
+	}
+	return connect.CodeInternal
+}
+
 // Status returns the current status of the provided plugin.
 func (r *rpc) Status(_ context.Context, req *connect.Request[statusV2.StatusRequest]) (*connect.Response[statusV2.StatusResponse], error) {
 	const op = errors.Op("checker_rpc_status")
 	plugin := req.Msg.GetPlugin()
 	r.log.Debug("Status method was invoked", "plugin", plugin)
 
-	resp := &statusV2.StatusResponse{}
 	st, err := r.srv.status(plugin)
 	if err != nil {
-		resp.Message = err.Error()
-		return nil, connect.NewError(connect.CodeInternal, errors.E(op, err))
+		return nil, connect.NewError(connectCodeFor(err), errors.E(op, err))
 	}
 
+	resp := &statusV2.StatusResponse{}
 	if st != nil {
 		resp.Code = int64(st.Code)
 		r.log.Debug("status code", "code", st.Code)
@@ -42,13 +50,12 @@ func (r *rpc) Ready(_ context.Context, req *connect.Request[statusV2.StatusReque
 	plugin := req.Msg.GetPlugin()
 	r.log.Debug("Ready method was invoked", "plugin", plugin)
 
-	resp := &statusV2.StatusResponse{}
 	st, err := r.srv.ready(plugin)
 	if err != nil {
-		resp.Message = err.Error()
-		return nil, connect.NewError(connect.CodeInternal, errors.E(op, err))
+		return nil, connect.NewError(connectCodeFor(err), errors.E(op, err))
 	}
 
+	resp := &statusV2.StatusResponse{}
 	if st != nil {
 		resp.Code = int64(st.Code)
 		r.log.Debug("status code", "code", st.Code)

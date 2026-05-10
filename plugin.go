@@ -3,6 +3,7 @@ package status
 import (
 	"context"
 	stderr "errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"sync"
@@ -15,6 +16,9 @@ import (
 	"github.com/roadrunner-server/endure/v2/dep"
 	"github.com/roadrunner-server/errors"
 )
+
+// Mapped to connect.CodeNotFound by the rpc handler; other failures surface as CodeInternal.
+var errPluginNotFound = stderr.New("no such plugin")
 
 const (
 	// PluginName declares public plugin name.
@@ -133,25 +137,25 @@ func (c *Plugin) Stop(_ context.Context) error {
 	return nil
 }
 
-// Status returns a Checker interface implementation
-// Reset named service.
-// This is not a Status interface implementation
+// status looks up the named plugin in the status registry and delegates to its
+// Checker.Status. Returns errPluginNotFound (wrapped) if the name is not
+// registered.
 func (c *Plugin) status(name string) (*status.Status, error) {
-	const op = errors.Op("checker_plugin_status")
 	svc, ok := c.statusRegistry[name]
 	if !ok {
-		return nil, errors.E(op, errors.Errorf("no such plugin: %s", name))
+		return nil, fmt.Errorf("%w: %s", errPluginNotFound, name)
 	}
 
 	return svc.Status()
 }
 
-// ready is used to provide a readiness check for the plugin
+// ready looks up the named plugin in the readiness registry and delegates to
+// its Readiness.Ready. Returns errPluginNotFound (wrapped) if the name is not
+// registered.
 func (c *Plugin) ready(name string) (*status.Status, error) {
-	const op = errors.Op("checker_plugin_ready")
 	svc, ok := c.readyRegistry[name]
 	if !ok {
-		return nil, errors.E(op, errors.Errorf("no such plugin: %s", name))
+		return nil, fmt.Errorf("%w: %s", errPluginNotFound, name)
 	}
 
 	return svc.Ready()

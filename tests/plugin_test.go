@@ -669,13 +669,14 @@ func TestRPCNonExistentPlugin(t *testing.T) {
 		Path:    "configs/.rr-status-init.yaml",
 	}
 
+	// Minimal stack: this test only verifies the "no such plugin" path of the
+	// status RPC handler, so no Checker/Readiness providers are needed and
+	// http/server are dropped to keep the test PHP-independent.
 	sp := &status.Plugin{}
 	err := cont.RegisterAll(
 		cfg,
 		&rpcPlugin.Plugin{},
 		&logger.Plugin{},
-		&server.Plugin{},
-		&httpPlugin.Plugin{},
 		sp,
 	)
 	assert.NoError(t, err)
@@ -728,14 +729,14 @@ func TestRPCNonExistentPlugin(t *testing.T) {
 		client := newStatusClient(t, "127.0.0.1:6005")
 		_, err := client.Status(t.Context(), connect.NewRequest(&statusV2.StatusRequest{Plugin: "nonexistent"}))
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "no such plugin")
+		assert.Equal(t, connect.CodeNotFound, connect.CodeOf(err))
 	})
 
 	t.Run("ReadyNonExistent", func(t *testing.T) {
 		client := newStatusClient(t, "127.0.0.1:6005")
 		_, err := client.Ready(t.Context(), connect.NewRequest(&statusV2.StatusRequest{Plugin: "nonexistent"}))
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "no such plugin")
+		assert.Equal(t, connect.CodeNotFound, connect.CodeOf(err))
 	})
 
 	stopCh <- struct{}{}
@@ -830,7 +831,7 @@ func doHTTPReq(t *testing.T) {
 }
 
 func checkHTTPReadiness2(t *testing.T) {
-	req, err := http.NewRequest("GET", "http://127.0.0.1:34334/ready?plugin=http&plugin=rpc", nil)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://127.0.0.1:34334/ready?plugin=http&plugin=rpc", nil)
 	assert.NoError(t, err)
 
 	r, err := http.DefaultClient.Do(req)
@@ -852,7 +853,7 @@ func checkHTTPReadiness2(t *testing.T) {
 }
 
 func checkHTTPReadinessAll(t *testing.T) {
-	req, err := http.NewRequest("GET", "http://127.0.0.1:34333/ready", nil)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://127.0.0.1:34333/ready", nil)
 	assert.NoError(t, err)
 
 	r, err := http.DefaultClient.Do(req)
@@ -869,7 +870,7 @@ func checkHTTPReadinessAll(t *testing.T) {
 }
 
 func checkHTTPReadiness(t *testing.T) {
-	req, err := http.NewRequest("GET", "http://127.0.0.1:34333/ready?plugin=http&plugin=rpc", nil)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://127.0.0.1:34333/ready?plugin=http&plugin=rpc", nil)
 	assert.NoError(t, err)
 
 	r, err := http.DefaultClient.Do(req)
