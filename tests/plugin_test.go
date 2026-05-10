@@ -2,12 +2,12 @@ package status
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"io"
 	"log/slog"
 	"net"
 	"net/http"
-	"net/rpc"
 	"os"
 	"os/signal"
 	"sync"
@@ -15,10 +15,11 @@ import (
 	"testing"
 	"time"
 
-	statusv2 "github.com/roadrunner-server/api-go/v6/status/v2"
+	"connectrpc.com/connect"
+	statusV2 "github.com/roadrunner-server/api-go/v6/status/v2"
+	"github.com/roadrunner-server/api-go/v6/status/v2/statusV2connect"
 	"github.com/roadrunner-server/config/v6"
 	"github.com/roadrunner-server/endure/v2"
-	goridgeRpc "github.com/roadrunner-server/goridge/v4/pkg/rpc"
 	httpPlugin "github.com/roadrunner-server/http/v6"
 	"github.com/roadrunner-server/jobs/v6"
 	"github.com/roadrunner-server/logger/v6"
@@ -28,7 +29,25 @@ import (
 	"github.com/roadrunner-server/status/v6"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/net/http2"
 )
+
+// newStatusClient builds an h2c Connect client for the migrated
+// status.v2.StatusService served by the rpc plugin.
+func newStatusClient(t *testing.T, address string) statusV2connect.StatusServiceClient {
+	t.Helper()
+	httpc := &http.Client{
+		Timeout: 10 * time.Second,
+		Transport: &http2.Transport{
+			AllowHTTP: true,
+			DialTLSContext: func(ctx context.Context, network, addr string, _ *tls.Config) (net.Conn, error) {
+				return new(net.Dialer).DialContext(ctx, network, addr)
+			},
+		},
+	}
+	t.Cleanup(httpc.CloseIdleConnections)
+	return statusV2connect.NewStatusServiceClient(httpc, "http://"+address)
+}
 
 func TestStatusHttp(t *testing.T) {
 	cont := endure.New(slog.LevelDebug, endure.GracefulShutdownTimeout(time.Minute))
@@ -616,9 +635,7 @@ func TestShutdown503(t *testing.T) {
 	require.NotNil(t, rsp)
 
 	assert.Equal(t, http.StatusServiceUnavailable, rsp.StatusCode)
-	if rsp != nil {
-		_ = rsp.Body.Close()
-	}
+	_ = rsp.Body.Close()
 
 	// Also verify /jobs returns 503 during shutdown
 	req, err = http.NewRequestWithContext(context.Background(), http.MethodGet, "http://127.0.0.1:34711/jobs", nil)
@@ -652,13 +669,14 @@ func TestRPCNonExistentPlugin(t *testing.T) {
 		Path:    "configs/.rr-status-init.yaml",
 	}
 
+	// Minimal stack: this test only verifies the "no such plugin" path of the
+	// status RPC handler, so no Checker/Readiness providers are needed and
+	// http/server are dropped to keep the test PHP-independent.
 	sp := &status.Plugin{}
 	err := cont.RegisterAll(
 		cfg,
 		&rpcPlugin.Plugin{},
 		&logger.Plugin{},
-		&server.Plugin{},
-		&httpPlugin.Plugin{},
 		sp,
 	)
 	assert.NoError(t, err)
@@ -708,29 +726,17 @@ func TestRPCNonExistentPlugin(t *testing.T) {
 	time.Sleep(time.Second)
 
 	t.Run("StatusNonExistent", func(t *testing.T) {
-		conn, err := net.Dial("tcp", "127.0.0.1:6005")
-		require.NoError(t, err)
-		client := rpc.NewClientWithCodec(goridgeRpc.NewClientCodec(conn))
-
-		req := &statusv2.StatusRequest{Plugin: "nonexistent"}
-		rsp := &statusv2.StatusResponse{}
-
-		err = client.Call("status.Status", req, rsp)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "no such plugin")
+		client := newStatusClient(t, "127.0.0.1:6005")
+		_, err := client.Status(t.Context(), connect.NewRequest(&statusV2.StatusRequest{Plugin: "nonexistent"}))
+		require.Error(t, err)
+		assert.Equal(t, connect.CodeNotFound, connect.CodeOf(err))
 	})
 
 	t.Run("ReadyNonExistent", func(t *testing.T) {
-		conn, err := net.Dial("tcp", "127.0.0.1:6005")
-		require.NoError(t, err)
-		client := rpc.NewClientWithCodec(goridgeRpc.NewClientCodec(conn))
-
-		req := &statusv2.StatusRequest{Plugin: "nonexistent"}
-		rsp := &statusv2.StatusResponse{}
-
-		err = client.Call("status.Ready", req, rsp)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "no such plugin")
+		client := newStatusClient(t, "127.0.0.1:6005")
+		_, err := client.Ready(t.Context(), connect.NewRequest(&statusV2.StatusRequest{Plugin: "nonexistent"}))
+		require.Error(t, err)
+		assert.Equal(t, connect.CodeNotFound, connect.CodeOf(err))
 	})
 
 	stopCh <- struct{}{}
@@ -742,7 +748,7 @@ func TestRPCNonExistentPlugin(t *testing.T) {
 }
 
 func checkJobsReadiness(t *testing.T) {
-	req, err := http.NewRequest("GET", "http://127.0.0.1:35544/ready?plugin=jobs", nil)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://127.0.0.1:35544/ready?plugin=jobs", nil)
 	assert.NoError(t, err)
 
 	r, err := http.DefaultClient.Do(req)
@@ -766,7 +772,7 @@ func checkJobsReadiness(t *testing.T) {
 }
 
 func checkHTTPStatus(t *testing.T) {
-	req, err := http.NewRequest("GET", "http://127.0.0.1:34333/health?plugin=http&plugin=rpc", nil)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://127.0.0.1:34333/health?plugin=http&plugin=rpc", nil)
 	assert.NoError(t, err)
 
 	r, err := http.DefaultClient.Do(req)
@@ -789,7 +795,7 @@ func checkHTTPStatus(t *testing.T) {
 }
 
 func checkHTTPStatusAll(t *testing.T) {
-	req, err := http.NewRequest("GET", "http://127.0.0.1:34333/health", nil)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://127.0.0.1:34333/health", nil)
 	assert.NoError(t, err)
 
 	r, err := http.DefaultClient.Do(req)
@@ -825,7 +831,7 @@ func doHTTPReq(t *testing.T) {
 }
 
 func checkHTTPReadiness2(t *testing.T) {
-	req, err := http.NewRequest("GET", "http://127.0.0.1:34334/ready?plugin=http&plugin=rpc", nil)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://127.0.0.1:34334/ready?plugin=http&plugin=rpc", nil)
 	assert.NoError(t, err)
 
 	r, err := http.DefaultClient.Do(req)
@@ -847,7 +853,7 @@ func checkHTTPReadiness2(t *testing.T) {
 }
 
 func checkHTTPReadinessAll(t *testing.T) {
-	req, err := http.NewRequest("GET", "http://127.0.0.1:34333/ready", nil)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://127.0.0.1:34333/ready", nil)
 	assert.NoError(t, err)
 
 	r, err := http.DefaultClient.Do(req)
@@ -864,7 +870,7 @@ func checkHTTPReadinessAll(t *testing.T) {
 }
 
 func checkHTTPReadiness(t *testing.T) {
-	req, err := http.NewRequest("GET", "http://127.0.0.1:34333/ready?plugin=http&plugin=rpc", nil)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://127.0.0.1:34333/ready?plugin=http&plugin=rpc", nil)
 	assert.NoError(t, err)
 
 	r, err := http.DefaultClient.Do(req)
@@ -880,34 +886,16 @@ func checkHTTPReadiness(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func checkRPCReadiness(t *testing.T, plugin string, status int64, port string) {
-	conn, err := net.Dial("tcp", "127.0.0.1:"+port)
-	assert.NoError(t, err)
-	client := rpc.NewClientWithCodec(goridgeRpc.NewClientCodec(conn))
-
-	req := &statusv2.StatusRequest{
-		Plugin: plugin,
-	}
-
-	rsp := &statusv2.StatusResponse{}
-
-	err = client.Call("status.Ready", req, rsp)
-	assert.NoError(t, err)
-	assert.Equal(t, rsp.GetCode(), status)
+func checkRPCReadiness(t *testing.T, plugin string, code int64, port string) {
+	client := newStatusClient(t, "127.0.0.1:"+port)
+	resp, err := client.Ready(t.Context(), connect.NewRequest(&statusV2.StatusRequest{Plugin: plugin}))
+	require.NoError(t, err)
+	assert.Equal(t, code, resp.Msg.GetCode())
 }
 
-func checkRPCStatus(t *testing.T, plugin string, status int64, port string) {
-	conn, err := net.Dial("tcp", "127.0.0.1:"+port)
-	assert.NoError(t, err)
-	client := rpc.NewClientWithCodec(goridgeRpc.NewClientCodec(conn))
-
-	req := &statusv2.StatusRequest{
-		Plugin: plugin,
-	}
-
-	rsp := &statusv2.StatusResponse{}
-
-	err = client.Call("status.Status", req, rsp)
-	assert.NoError(t, err)
-	assert.Equal(t, rsp.Code, status)
+func checkRPCStatus(t *testing.T, plugin string, code int64, port string) {
+	client := newStatusClient(t, "127.0.0.1:"+port)
+	resp, err := client.Status(t.Context(), connect.NewRequest(&statusV2.StatusRequest{Plugin: plugin}))
+	require.NoError(t, err)
+	assert.Equal(t, code, resp.Msg.GetCode())
 }
