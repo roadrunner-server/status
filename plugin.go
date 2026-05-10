@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/roadrunner-server/api-go/v6/status/v2/statusV2connect"
 	jobsApi "github.com/roadrunner-server/api-plugins/v6/jobs"
 	"github.com/roadrunner-server/api-plugins/v6/status"
 	"github.com/roadrunner-server/endure/v2/dep"
@@ -188,7 +189,8 @@ func (c *Plugin) Name() string {
 	return PluginName
 }
 
-// RPC returns associated rpc service.
-func (c *Plugin) RPC() any {
-	return &rpc{srv: c, log: c.log}
+// RPC returns the Connect-RPC service handler for status.v2.StatusService.
+// The rpc plugin mounts the returned handler at the returned path on its HTTP/2 mux.
+func (c *Plugin) RPC() (string, http.Handler) {
+	return statusV2connect.NewStatusServiceHandler(&rpc{srv: c, log: c.log})
 }

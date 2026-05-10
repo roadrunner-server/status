@@ -5,23 +5,25 @@ go 1.26
 toolchain go1.26.0
 
 require (
-	github.com/roadrunner-server/api-go/v6 v6.0.0-beta.4
+	connectrpc.com/connect v1.19.2
+	github.com/roadrunner-server/api-go/v6 v6.0.0-beta.5
 	github.com/roadrunner-server/config/v6 v6.0.0-beta.3
 	github.com/roadrunner-server/endure/v2 v2.6.2
-	github.com/roadrunner-server/goridge/v4 v4.0.0-beta.1
-	github.com/roadrunner-server/http/v6 v6.0.0-beta.6
-	github.com/roadrunner-server/jobs/v6 v6.0.0-beta.6
+	github.com/roadrunner-server/http/v6 v6.0.0-beta.7
+	github.com/roadrunner-server/jobs/v6 v6.0.0-beta.7
 	github.com/roadrunner-server/logger/v6 v6.0.0-beta.3
-	github.com/roadrunner-server/memory/v6 v6.0.0-beta.3
-	github.com/roadrunner-server/rpc/v6 v6.0.0-beta.3
-	github.com/roadrunner-server/server/v6 v6.0.0-beta.5
-	github.com/roadrunner-server/status/v6 v6.0.0-beta.3
+	github.com/roadrunner-server/memory/v6 v6.0.0-beta.4
+	github.com/roadrunner-server/rpc/v6 v6.0.0-beta.4
+	github.com/roadrunner-server/server/v6 v6.0.0-beta.6
+	github.com/roadrunner-server/status/v6 v6.0.0-beta.4
 	github.com/stretchr/testify v1.11.1
+	golang.org/x/net v0.54.0
 )
 
 replace github.com/roadrunner-server/status/v6 => ../
 
 require (
+	connectrpc.com/grpcreflect v1.3.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/caddyserver/certmagic v0.25.3 // indirect
 	github.com/caddyserver/zerossl v0.1.5 // indirect
@@ -56,6 +58,7 @@ require (
 	github.com/roadrunner-server/context v1.3.0 // indirect
 	github.com/roadrunner-server/errors v1.5.0 // indirect
 	github.com/roadrunner-server/events v1.0.1 // indirect
+	github.com/roadrunner-server/goridge/v4 v4.0.0-beta.2 // indirect
 	github.com/roadrunner-server/pool/v2 v2.0.0-beta.1 // indirect
 	github.com/roadrunner-server/priority_queue v1.0.6 // indirect
 	github.com/roadrunner-server/tcplisten v1.5.2 // indirect
@@ -85,7 +88,6 @@ require (
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/crypto v0.51.0 // indirect
 	golang.org/x/mod v0.36.0 // indirect
-	golang.org/x/net v0.54.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.44.0 // indirect
 	golang.org/x/text v0.37.0 // indirect
