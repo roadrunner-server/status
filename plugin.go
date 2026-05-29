@@ -64,8 +64,8 @@ type Plugin struct {
 	readyRegistry map[string]Readiness
 	// jobs plugin checker
 	statusJobsRegistry JobsChecker
-	// shared pointer
-	shutdownInitiated atomic.Pointer[bool]
+	// true once Stop is called; checked by all HTTP handlers
+	shutdownInitiated atomic.Bool
 	server            *http.Server
 	log               *slog.Logger
 	cfg               *Config
@@ -86,7 +86,6 @@ func (c *Plugin) Init(cfg Configurer, log Logger) error {
 
 	c.readyRegistry = make(map[string]Readiness)
 	c.statusRegistry = make(map[string]Checker)
-	c.shutdownInitiated.Store(new(false))
 
 	c.log = log.NamedLogger(PluginName)
 
@@ -132,7 +131,7 @@ func (c *Plugin) Stop(_ context.Context) error {
 	defer c.mu.Unlock()
 
 	// set shutdown to true, thus all endpoints will return 503
-	c.shutdownInitiated.Store(new(true))
+	c.shutdownInitiated.Store(true)
 
 	return nil
 }
