@@ -25,7 +25,7 @@ func NewJobsHandler(jc JobsChecker, shutdownInitiated *atomic.Bool, log *slog.Lo
 
 func (jb *Jobs) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if jb.shutdownInitiated != nil && jb.shutdownInitiated.Load() {
-		http.Error(w, "service is shutting down", http.StatusServiceUnavailable)
+		http.Error(w, "service is shutting down", jb.unavailableStatusCode)
 		return
 	}
 

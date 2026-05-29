@@ -130,7 +130,7 @@ func (c *Plugin) Stop(_ context.Context) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// set shutdown to true, thus all endpoints will return 503
+	// set shutdown to true, thus all endpoints will return the configured unavailable status code
 	c.shutdownInitiated.Store(true)
 
 	return nil

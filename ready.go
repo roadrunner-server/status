@@ -28,7 +28,7 @@ func NewReadyHandler(sr map[string]Readiness, shutdownInitiated *atomic.Bool, lo
 
 func (rd *Ready) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if rd.shutdownInitiated != nil && rd.shutdownInitiated.Load() {
-		http.Error(w, "service is shutting down", http.StatusServiceUnavailable)
+		http.Error(w, "service is shutting down", rd.unavailableStatusCode)
 		return
 	}
 
