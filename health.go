@@ -25,7 +25,10 @@ func NewHealthHandler(sr map[string]Checker, shutdownInitiated *atomic.Bool, log
 
 func (rd *Health) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if rd.shutdownInitiated != nil && rd.shutdownInitiated.Load() {
-		http.Error(w, "service is shutting down", rd.unavailableStatusCode)
+		// Liveness stays 200 during graceful shutdown so the orchestrator does not
+		// kill the draining process; readiness (/ready) and /jobs return the
+		// configured unavailable code instead. Do NOT collapse onto unavailableStatusCode.
+		http.Error(w, "service is shutting down", http.StatusOK)
 		return
 	}
 

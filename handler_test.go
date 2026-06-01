@@ -82,7 +82,8 @@ func TestHealthHandler(t *testing.T) {
 		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/health", nil)
 		h.ServeHTTP(rec, req)
 
-		assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+		// Liveness stays 200 during graceful shutdown (unlike /ready and /jobs).
+		assert.Equal(t, http.StatusOK, rec.Code)
 		assert.Contains(t, rec.Body.String(), "service is shutting down")
 	})
 
