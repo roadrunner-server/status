@@ -78,6 +78,7 @@ jobs:
 
       - name: Run status e2e tests with coverage
         run: |
+          mkdir -p coverage-ci
           cd tests
           go test -timeout 20m -v -race -cover -tags=debug -failfast -coverpkg=github.com/roadrunner-server/status/v6/... -coverprofile=../coverage-ci/e2e.out -covermode=atomic ./...
 
