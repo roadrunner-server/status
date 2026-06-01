@@ -130,7 +130,9 @@ func (c *Plugin) Stop(_ context.Context) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// set shutdown to true, thus all endpoints will return the configured unavailable status code
+	// set shutdown to true: /ready and /jobs then return the configured unavailable
+	// status code, while /health (liveness) stays 200 so the orchestrator does not
+	// kill the draining process
 	c.shutdownInitiated.Store(true)
 
 	return nil
