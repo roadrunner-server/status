@@ -11,9 +11,10 @@
 //   - /jobs   – returns the state of job pipelines from a plugin that
 //     implements the [JobsChecker] interface.
 //
-// During graceful shutdown the endpoints respond with 503 Service Unavailable
-// (or a configurable status code) so that external load balancers can drain
-// traffic before the process exits.
+// During graceful shutdown /ready and /jobs respond with the configured
+// unavailable status code (503 by default) so external load balancers can drain
+// traffic, while /health stays 200 (liveness) so the orchestrator does not kill
+// the still-draining process.
 //
 // An RPC service is also registered, providing Status and Ready methods for
 // programmatic access from RoadRunner workers or CLI tools.

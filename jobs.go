@@ -1,7 +1,6 @@
 package status
 
 import (
-	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -12,10 +11,10 @@ type Jobs struct {
 	statusJobsRegistry    JobsChecker
 	unavailableStatusCode int
 	log                   *slog.Logger
-	shutdownInitiated     *atomic.Pointer[bool]
+	shutdownInitiated     *atomic.Bool
 }
 
-func NewJobsHandler(jc JobsChecker, shutdownInitiated *atomic.Pointer[bool], log *slog.Logger, usc int) *Jobs {
+func NewJobsHandler(jc JobsChecker, shutdownInitiated *atomic.Bool, log *slog.Logger, usc int) *Jobs {
 	return &Jobs{
 		statusJobsRegistry:    jc,
 		unavailableStatusCode: usc,
@@ -24,9 +23,9 @@ func NewJobsHandler(jc JobsChecker, shutdownInitiated *atomic.Pointer[bool], log
 	}
 }
 
-func (jb *Jobs) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
-	if jb.shutdownInitiated != nil && *jb.shutdownInitiated.Load() {
-		http.Error(w, "service is shutting down", http.StatusServiceUnavailable)
+func (jb *Jobs) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if jb.shutdownInitiated != nil && jb.shutdownInitiated.Load() {
+		http.Error(w, "service is shutting down", jb.unavailableStatusCode)
 		return
 	}
 
@@ -35,7 +34,7 @@ func (jb *Jobs) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 
-	jobStates, err := jb.statusJobsRegistry.JobsState(context.Background())
+	jobStates, err := jb.statusJobsRegistry.JobsState(r.Context())
 	if err != nil {
 		jb.log.Error("jobs state", "error", err)
 		http.Error(w, "jobs plugin not found", jb.unavailableStatusCode)
@@ -45,17 +44,17 @@ func (jb *Jobs) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 	report := make([]*JobsReport, 0, len(jobStates))
 
 	// write info about underlying drivers
-	for i := range jobStates {
+	for _, js := range jobStates {
 		report = append(report, &JobsReport{
-			Pipeline:     jobStates[i].Pipeline,
-			Priority:     jobStates[i].Priority,
-			Ready:        jobStates[i].Ready,
-			Queue:        jobStates[i].Queue,
-			Active:       jobStates[i].Active,
-			Delayed:      jobStates[i].Delayed,
-			Reserved:     jobStates[i].Reserved,
-			Driver:       jobStates[i].Driver,
-			ErrorMessage: jobStates[i].ErrorMessage,
+			Pipeline:     js.Pipeline,
+			Priority:     js.Priority,
+			Ready:        js.Ready,
+			Queue:        js.Queue,
+			Active:       js.Active,
+			Delayed:      js.Delayed,
+			Reserved:     js.Reserved,
+			Driver:       js.Driver,
+			ErrorMessage: js.ErrorMessage,
 		})
 	}
 

@@ -14,10 +14,10 @@ type Ready struct {
 	log                   *slog.Logger
 	unavailableStatusCode int
 	statusRegistry        map[string]Readiness
-	shutdownInitiated     *atomic.Pointer[bool]
+	shutdownInitiated     *atomic.Bool
 }
 
-func NewReadyHandler(sr map[string]Readiness, shutdownInitiated *atomic.Pointer[bool], log *slog.Logger, usc int) *Ready {
+func NewReadyHandler(sr map[string]Readiness, shutdownInitiated *atomic.Bool, log *slog.Logger, usc int) *Ready {
 	return &Ready{
 		log:                   log,
 		statusRegistry:        sr,
@@ -27,13 +27,13 @@ func NewReadyHandler(sr map[string]Readiness, shutdownInitiated *atomic.Pointer[
 }
 
 func (rd *Ready) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if rd.shutdownInitiated != nil && *rd.shutdownInitiated.Load() {
-		http.Error(w, "service is shutting down", http.StatusServiceUnavailable)
+	if rd.shutdownInitiated != nil && rd.shutdownInitiated.Load() {
+		http.Error(w, "service is shutting down", rd.unavailableStatusCode)
 		return
 	}
 
 	// report will be used either for all plugins or for the Plugins in the query
-	report := make([]*Report, 0, 2)
+	report := make([]*Report, 0, len(rd.statusRegistry))
 
 	plg := r.URL.Query()[pluginsQuery]
 	// if no Plugins provided, check them all
@@ -111,55 +111,57 @@ func (rd *Ready) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// iterate over all provided Plugins
-	for i := range plg {
-		if svc, ok := rd.statusRegistry[plg[i]]; ok {
-			if svc == nil {
-				continue
-			}
+	for _, name := range plg {
+		svc, ok := rd.statusRegistry[name]
+		if !ok {
+			rd.log.Info("plugin does not support readiness checks", "plugin", name)
+			continue
+		}
 
-			st, err := rd.statusRegistry[plg[i]].Ready()
-			if err != nil {
-				w.WriteHeader(rd.unavailableStatusCode)
-				report = append(report, &Report{
-					PluginName:   plg[i],
-					ErrorMessage: err.Error(),
-					StatusCode:   http.StatusInternalServerError,
-				})
-				continue
-			}
+		if svc == nil {
+			continue
+		}
 
-			if st == nil {
-				report = append(report, &Report{
-					PluginName:   plg[i],
-					ErrorMessage: "plugin is not available",
-					StatusCode:   rd.unavailableStatusCode,
-				})
-				continue
-			}
+		st, err := svc.Ready()
+		if err != nil {
+			w.WriteHeader(rd.unavailableStatusCode)
+			report = append(report, &Report{
+				PluginName:   name,
+				ErrorMessage: err.Error(),
+				StatusCode:   http.StatusInternalServerError,
+			})
+			continue
+		}
 
-			switch {
-			case st.Code >= 500:
-				// on >=500, write header, because it'll be written on Write (200)
-				w.WriteHeader(rd.unavailableStatusCode)
-				report = append(report, &Report{
-					PluginName:   plg[i],
-					ErrorMessage: "internal server error, see logs",
-					StatusCode:   rd.unavailableStatusCode,
-				})
-			case st.Code >= 100 && st.Code <= 400:
-				report = append(report, &Report{
-					PluginName: plg[i],
-					StatusCode: st.Code,
-				})
-			default:
-				report = append(report, &Report{
-					PluginName:   plg[i],
-					ErrorMessage: "unexpected status code",
-					StatusCode:   st.Code,
-				})
-			}
-		} else {
-			rd.log.Info("plugin does not support readiness checks", "plugin", plg[i])
+		if st == nil {
+			report = append(report, &Report{
+				PluginName:   name,
+				ErrorMessage: "plugin is not available",
+				StatusCode:   rd.unavailableStatusCode,
+			})
+			continue
+		}
+
+		switch {
+		case st.Code >= 500:
+			// on >=500, write header, because it'll be written on Write (200)
+			w.WriteHeader(rd.unavailableStatusCode)
+			report = append(report, &Report{
+				PluginName:   name,
+				ErrorMessage: "internal server error, see logs",
+				StatusCode:   rd.unavailableStatusCode,
+			})
+		case st.Code >= 100 && st.Code <= 400:
+			report = append(report, &Report{
+				PluginName: name,
+				StatusCode: st.Code,
+			})
+		default:
+			report = append(report, &Report{
+				PluginName:   name,
+				ErrorMessage: "unexpected status code",
+				StatusCode:   st.Code,
+			})
 		}
 	}
 

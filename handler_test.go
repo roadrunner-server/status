@@ -49,9 +49,9 @@ func (m *mockJobsChecker) Name() string { return "jobs" }
 
 // --- Helpers ---
 
-func newShutdownPtr(val bool) *atomic.Pointer[bool] {
-	var p atomic.Pointer[bool]
-	p.Store(&val)
+func newShutdownPtr(val bool) *atomic.Bool {
+	var p atomic.Bool
+	p.Store(val)
 	return &p
 }
 
@@ -82,6 +82,7 @@ func TestHealthHandler(t *testing.T) {
 		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/health", nil)
 		h.ServeHTTP(rec, req)
 
+		// Liveness stays 200 during graceful shutdown (unlike /ready and /jobs).
 		assert.Equal(t, http.StatusOK, rec.Code)
 		assert.Contains(t, rec.Body.String(), "service is shutting down")
 	})

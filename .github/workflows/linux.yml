@@ -10,6 +10,9 @@ on:
       - master
       - stable
 
+permissions:
+  contents: read
+
 jobs:
   status_test:
     name: Status plugin (Go ${{ matrix.go }}, PHP ${{ matrix.php }}, OS ${{matrix.os}})
@@ -34,6 +37,8 @@ jobs:
 
       - name: Check out code
         uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: Get Composer Cache Directory
         id: composer-cache
@@ -66,17 +71,22 @@ jobs:
       - name: Install Go dependencies
         run: go mod download
 
+      - name: Run unit tests with coverage
+        run: |
+          mkdir -p coverage-ci
+          go test -v -race -cover -coverpkg=./... -coverprofile=./coverage-ci/unit.out -covermode=atomic ./...
+
       - name: Run status e2e tests with coverage
         run: |
+          mkdir -p coverage-ci
           cd tests
-          mkdir ./coverage-ci
-          go test -timeout 20m -v -race -cover -tags=debug -failfast -coverpkg=./... -coverprofile=./coverage-ci/status.out -covermode=atomic ./...
+          go test -timeout 20m -v -race -cover -tags=debug -failfast -coverpkg=github.com/roadrunner-server/status/v6/... -coverprofile=../coverage-ci/e2e.out -covermode=atomic ./...
 
       - name: Archive code coverage results
         uses: actions/upload-artifact@v7
         with:
           name: coverage
-          path: ./tests/coverage-ci/
+          path: ./coverage-ci/
 
   codecov:
     name: Upload codecov
@@ -87,24 +97,27 @@ jobs:
     steps:
       - name: Check out code
         uses: actions/checkout@v6
+        with:
+          persist-credentials: false
       - name: Download code coverage results
         uses: actions/download-artifact@v8
         with:
           name: coverage
           path: coverage
-      - run: |
-          echo 'mode: atomic' > summary.txt
-          tail -q -n +2 coverage/*.out >> summary.txt
-          awk '
-            NR == 1 { print; next }
-            /^github\.com\/roadrunner-server\/status\/v6\// {
-              sub(/^github\.com\/roadrunner-server\/status\/v6\//, "", $0)
-              print
-            }
-          ' summary.txt > summary.filtered.txt
-          mv summary.filtered.txt summary.txt
+      - name: Prepare coverage reports
+        run: |
+          for f in coverage/*.out; do
+            out="$(basename "${f%.out}").txt"
+            echo 'mode: atomic' > "$out"
+            awk '
+              /^github\.com\/roadrunner-server\/status\/v6\// {
+                sub(/^github\.com\/roadrunner-server\/status\/v6\//, "", $0)
+                print
+              }
+            ' "$f" >> "$out"
+          done
       - name: upload to codecov
         uses: codecov/codecov-action@v6 # Docs: <https://github.com/codecov/codecov-action>
         with:
-          files: summary.txt
+          files: unit.txt,e2e.txt
           fail_ci_if_error: false
