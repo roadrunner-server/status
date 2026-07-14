@@ -10,14 +10,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/roadrunner-server/api-go/v6/status/v2/statusV2connect"
 	jobsApi "github.com/roadrunner-server/api-plugins/v6/jobs"
 	"github.com/roadrunner-server/api-plugins/v6/status"
 	"github.com/roadrunner-server/endure/v2/dep"
 	"github.com/roadrunner-server/errors"
 )
 
-// Mapped to connect.CodeNotFound by the rpc handler; other failures surface as CodeInternal.
+// errPluginNotFound is returned (wrapped) by status/ready when the requested plugin is not registered.
 var errPluginNotFound = stderr.New("no such plugin")
 
 const (
@@ -194,8 +193,7 @@ func (c *Plugin) Name() string {
 	return PluginName
 }
 
-// RPC returns the Connect-RPC service handler for status.v2.StatusService.
-// The rpc plugin mounts the returned handler at the returned path on its HTTP/2 mux.
-func (c *Plugin) RPC() (string, http.Handler) {
-	return statusV2connect.NewStatusServiceHandler(&rpc{srv: c, log: c.log})
+// RPC returns the associated net/rpc service, served over goridge by the rpc plugin.
+func (c *Plugin) RPC() any {
+	return &rpc{srv: c, log: c.log}
 }
