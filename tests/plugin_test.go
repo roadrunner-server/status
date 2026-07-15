@@ -2,12 +2,12 @@ package status
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"io"
 	"log/slog"
 	"net"
 	"net/http"
+	"net/rpc"
 	"os"
 	"os/signal"
 	"sync"
@@ -15,11 +15,10 @@ import (
 	"testing"
 	"time"
 
-	"connectrpc.com/connect"
 	statusV2 "github.com/roadrunner-server/api-go/v6/status/v2"
-	"github.com/roadrunner-server/api-go/v6/status/v2/statusV2connect"
 	"github.com/roadrunner-server/config/v6"
 	"github.com/roadrunner-server/endure/v2"
+	goridgeRpc "github.com/roadrunner-server/goridge/v4/pkg/rpc"
 	httpPlugin "github.com/roadrunner-server/http/v6"
 	"github.com/roadrunner-server/jobs/v6"
 	"github.com/roadrunner-server/logger/v6"
@@ -29,24 +28,17 @@ import (
 	"github.com/roadrunner-server/status/v6"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/http2"
 )
 
-// newStatusClient builds an h2c Connect client for the migrated
-// status.v2.StatusService served by the rpc plugin.
-func newStatusClient(t *testing.T, address string) statusV2connect.StatusServiceClient {
+// newStatusRPCClient dials the rpc plugin and returns a net/rpc client speaking
+// the goridge codec for the status.v2.StatusService methods.
+func newStatusRPCClient(t *testing.T, address string) *rpc.Client {
 	t.Helper()
-	httpc := &http.Client{
-		Timeout: 10 * time.Second,
-		Transport: &http2.Transport{
-			AllowHTTP: true,
-			DialTLSContext: func(ctx context.Context, network, addr string, _ *tls.Config) (net.Conn, error) {
-				return new(net.Dialer).DialContext(ctx, network, addr)
-			},
-		},
-	}
-	t.Cleanup(httpc.CloseIdleConnections)
-	return statusV2connect.NewStatusServiceClient(httpc, "http://"+address)
+	conn, err := net.Dial("tcp", address)
+	require.NoError(t, err)
+	client := rpc.NewClientWithCodec(goridgeRpc.NewClientCodec(conn))
+	t.Cleanup(func() { _ = client.Close() })
+	return client
 }
 
 func TestStatusHttp(t *testing.T) {
@@ -710,17 +702,17 @@ func TestRPCNonExistentPlugin(t *testing.T) {
 	time.Sleep(time.Second)
 
 	t.Run("StatusNonExistent", func(t *testing.T) {
-		client := newStatusClient(t, "127.0.0.1:6005")
-		_, err := client.Status(t.Context(), connect.NewRequest(&statusV2.StatusRequest{Plugin: "nonexistent"}))
+		client := newStatusRPCClient(t, "127.0.0.1:6005")
+		err := client.Call("status.Status", &statusV2.StatusRequest{Plugin: "nonexistent"}, &statusV2.StatusResponse{})
 		require.Error(t, err)
-		assert.Equal(t, connect.CodeNotFound, connect.CodeOf(err))
+		assert.Contains(t, err.Error(), "no such plugin")
 	})
 
 	t.Run("ReadyNonExistent", func(t *testing.T) {
-		client := newStatusClient(t, "127.0.0.1:6005")
-		_, err := client.Ready(t.Context(), connect.NewRequest(&statusV2.StatusRequest{Plugin: "nonexistent"}))
+		client := newStatusRPCClient(t, "127.0.0.1:6005")
+		err := client.Call("status.Ready", &statusV2.StatusRequest{Plugin: "nonexistent"}, &statusV2.StatusResponse{})
 		require.Error(t, err)
-		assert.Equal(t, connect.CodeNotFound, connect.CodeOf(err))
+		assert.Contains(t, err.Error(), "no such plugin")
 	})
 
 	stopCh <- struct{}{}
@@ -871,15 +863,17 @@ func checkHTTPReadiness(t *testing.T) {
 }
 
 func checkRPCReadiness(t *testing.T, plugin string, code int64, port string) {
-	client := newStatusClient(t, "127.0.0.1:"+port)
-	resp, err := client.Ready(t.Context(), connect.NewRequest(&statusV2.StatusRequest{Plugin: plugin}))
+	client := newStatusRPCClient(t, "127.0.0.1:"+port)
+	rsp := &statusV2.StatusResponse{}
+	err := client.Call("status.Ready", &statusV2.StatusRequest{Plugin: plugin}, rsp)
 	require.NoError(t, err)
-	assert.Equal(t, code, resp.Msg.GetCode())
+	assert.Equal(t, code, rsp.GetCode())
 }
 
 func checkRPCStatus(t *testing.T, plugin string, code int64, port string) {
-	client := newStatusClient(t, "127.0.0.1:"+port)
-	resp, err := client.Status(t.Context(), connect.NewRequest(&statusV2.StatusRequest{Plugin: plugin}))
+	client := newStatusRPCClient(t, "127.0.0.1:"+port)
+	rsp := &statusV2.StatusResponse{}
+	err := client.Call("status.Status", &statusV2.StatusRequest{Plugin: plugin}, rsp)
 	require.NoError(t, err)
-	assert.Equal(t, code, resp.Msg.GetCode())
+	assert.Equal(t, code, rsp.GetCode())
 }
