@@ -3,7 +3,7 @@ package status
 import (
 	"log/slog"
 
-	statusV2 "github.com/roadrunner-server/api-go/v6/status/v2"
+	statusV1 "github.com/roadrunner-server/api-go/v6/status/v1"
 	"github.com/roadrunner-server/errors"
 )
 
@@ -13,7 +13,7 @@ type rpc struct {
 }
 
 // Status returns the current status of the provided plugin.
-func (r *rpc) Status(in *statusV2.StatusRequest, out *statusV2.StatusResponse) error {
+func (r *rpc) Status(in *statusV1.Request, out *statusV1.Response) error {
 	const op = errors.Op("checker_rpc_status")
 	plugin := in.GetPlugin()
 	r.log.Debug("Status method was invoked", "plugin", plugin)
@@ -33,7 +33,7 @@ func (r *rpc) Status(in *statusV2.StatusRequest, out *statusV2.StatusResponse) e
 }
 
 // Ready returns the readiness check of the provided plugin.
-func (r *rpc) Ready(in *statusV2.StatusRequest, out *statusV2.StatusResponse) error {
+func (r *rpc) Ready(in *statusV1.Request, out *statusV1.Response) error {
 	const op = errors.Op("checker_rpc_ready")
 	plugin := in.GetPlugin()
 	r.log.Debug("Ready method was invoked", "plugin", plugin)

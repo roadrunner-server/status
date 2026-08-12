@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	statusV2 "github.com/roadrunner-server/api-go/v6/status/v2"
+	statusV1 "github.com/roadrunner-server/api-go/v6/status/v1"
 	"github.com/roadrunner-server/config/v6"
 	"github.com/roadrunner-server/endure/v2"
 	goridgeRpc "github.com/roadrunner-server/goridge/v4/pkg/rpc"
@@ -31,7 +31,7 @@ import (
 )
 
 // newStatusRPCClient dials the rpc plugin and returns a net/rpc client speaking
-// the goridge codec for the status.v2.StatusService methods.
+// the goridge codec for the status plugin methods.
 func newStatusRPCClient(t *testing.T, address string) *rpc.Client {
 	t.Helper()
 	conn, err := net.Dial("tcp", address)
@@ -703,14 +703,14 @@ func TestRPCNonExistentPlugin(t *testing.T) {
 
 	t.Run("StatusNonExistent", func(t *testing.T) {
 		client := newStatusRPCClient(t, "127.0.0.1:6005")
-		err := client.Call("status.Status", &statusV2.StatusRequest{Plugin: "nonexistent"}, &statusV2.StatusResponse{})
+		err := client.Call("status.Status", &statusV1.Request{Plugin: "nonexistent"}, &statusV1.Response{})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "no such plugin")
 	})
 
 	t.Run("ReadyNonExistent", func(t *testing.T) {
 		client := newStatusRPCClient(t, "127.0.0.1:6005")
-		err := client.Call("status.Ready", &statusV2.StatusRequest{Plugin: "nonexistent"}, &statusV2.StatusResponse{})
+		err := client.Call("status.Ready", &statusV1.Request{Plugin: "nonexistent"}, &statusV1.Response{})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "no such plugin")
 	})
@@ -864,16 +864,16 @@ func checkHTTPReadiness(t *testing.T) {
 
 func checkRPCReadiness(t *testing.T, plugin string, code int64, port string) {
 	client := newStatusRPCClient(t, "127.0.0.1:"+port)
-	rsp := &statusV2.StatusResponse{}
-	err := client.Call("status.Ready", &statusV2.StatusRequest{Plugin: plugin}, rsp)
+	rsp := &statusV1.Response{}
+	err := client.Call("status.Ready", &statusV1.Request{Plugin: plugin}, rsp)
 	require.NoError(t, err)
 	assert.Equal(t, code, rsp.GetCode())
 }
 
 func checkRPCStatus(t *testing.T, plugin string, code int64, port string) {
 	client := newStatusRPCClient(t, "127.0.0.1:"+port)
-	rsp := &statusV2.StatusResponse{}
-	err := client.Call("status.Status", &statusV2.StatusRequest{Plugin: plugin}, rsp)
+	rsp := &statusV1.Response{}
+	err := client.Call("status.Status", &statusV1.Request{Plugin: plugin}, rsp)
 	require.NoError(t, err)
 	assert.Equal(t, code, rsp.GetCode())
 }
