@@ -47,6 +47,38 @@ func (m *mockJobsChecker) JobsState(_ context.Context) ([]*jobsApi.State, error)
 }
 func (m *mockJobsChecker) Name() string { return "jobs" }
 
+// failingWriter is a ResponseWriter whose body write always fails, which is how
+// a client that hangs up mid-response looks to a handler.
+type failingWriter struct {
+	header http.Header
+}
+
+func newFailingWriter() *failingWriter {
+	return &failingWriter{header: make(http.Header)}
+}
+
+func (w *failingWriter) Header() http.Header { return w.header }
+func (w *failingWriter) WriteHeader(int)     {}
+
+func (w *failingWriter) Write([]byte) (int, error) {
+	return 0, errors.New("broken pipe")
+}
+
+// logCapture keeps the messages the handler logged.
+type logCapture struct {
+	messages []string
+}
+
+func (c *logCapture) Enabled(context.Context, slog.Level) bool { return true }
+
+func (c *logCapture) Handle(_ context.Context, r slog.Record) error {
+	c.messages = append(c.messages, r.Message)
+	return nil
+}
+
+func (c *logCapture) WithAttrs([]slog.Attr) slog.Handler { return c }
+func (c *logCapture) WithGroup(string) slog.Handler      { return c }
+
 // --- Helpers ---
 
 func newShutdownPtr(val bool) *atomic.Bool {
@@ -223,6 +255,21 @@ func TestHealthHandler(t *testing.T) {
 		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/health?plugin=nonexistent", nil)
 		h.ServeHTTP(rec, req)
 
+		assert.Equal(t, http.StatusOK, rec.Code)
+		reports := parseReports(t, rec.Body.Bytes())
+		assert.Empty(t, reports)
+	})
+
+	t.Run("Filtered_NilPlugin", func(t *testing.T) {
+		registry := map[string]Checker{
+			"http": nil,
+		}
+		h := NewHealthHandler(registry, newShutdownPtr(false), log, http.StatusServiceUnavailable)
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/health?plugin=http", nil)
+		h.ServeHTTP(rec, req)
+
+		// Filtered path skips a nil plugin, while the all-plugins path reports it
 		assert.Equal(t, http.StatusOK, rec.Code)
 		reports := parseReports(t, rec.Body.Bytes())
 		assert.Empty(t, reports)
@@ -470,6 +517,21 @@ func TestReadyHandler(t *testing.T) {
 		assert.Empty(t, reports)
 	})
 
+	t.Run("Filtered_NilPlugin", func(t *testing.T) {
+		registry := map[string]Readiness{
+			"http": nil,
+		}
+		h := NewReadyHandler(registry, newShutdownPtr(false), log, http.StatusServiceUnavailable)
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/ready?plugin=http", nil)
+		h.ServeHTTP(rec, req)
+
+		// Filtered path skips a nil plugin, while the all-plugins path reports it
+		assert.Equal(t, http.StatusOK, rec.Code)
+		reports := parseReports(t, rec.Body.Bytes())
+		assert.Empty(t, reports)
+	})
+
 	t.Run("Filtered_Error", func(t *testing.T) {
 		registry := map[string]Readiness{
 			"http": &mockReadiness{name: "http", err: errors.New("not ready")},
@@ -629,6 +691,78 @@ func TestJobsHandler(t *testing.T) {
 		assert.False(t, reports[1].Ready)
 		assert.Equal(t, "paused", reports[1].ErrorMessage)
 	})
+}
+
+// --- Response Write Failures ---
+
+// TestHandlerWriteError checks that a handler whose response body cannot be
+// written logs the failure instead of panicking.
+func TestHandlerWriteError(t *testing.T) {
+	healthRegistry := map[string]Checker{
+		"http": &mockChecker{name: "http", st: &apiStatus.Status{Code: 200}},
+	}
+	readyRegistry := map[string]Readiness{
+		"http": &mockReadiness{name: "http", st: &apiStatus.Status{Code: 200}},
+	}
+
+	for _, tt := range []struct {
+		newHandler func(log *slog.Logger) http.Handler
+		name       string
+		target     string
+		wantLog    string
+	}{
+		{
+			name:   "HealthAllPlugins",
+			target: "/health",
+			newHandler: func(log *slog.Logger) http.Handler {
+				return NewHealthHandler(healthRegistry, newShutdownPtr(false), log, http.StatusServiceUnavailable)
+			},
+			wantLog: "failed to write response",
+		},
+		{
+			name:   "HealthFiltered",
+			target: "/health?plugin=http",
+			newHandler: func(log *slog.Logger) http.Handler {
+				return NewHealthHandler(healthRegistry, newShutdownPtr(false), log, http.StatusServiceUnavailable)
+			},
+			wantLog: "failed to write response",
+		},
+		{
+			name:   "ReadyAllPlugins",
+			target: "/ready",
+			newHandler: func(log *slog.Logger) http.Handler {
+				return NewReadyHandler(readyRegistry, newShutdownPtr(false), log, http.StatusServiceUnavailable)
+			},
+			wantLog: "failed to write response",
+		},
+		{
+			name:   "ReadyFiltered",
+			target: "/ready?plugin=http",
+			newHandler: func(log *slog.Logger) http.Handler {
+				return NewReadyHandler(readyRegistry, newShutdownPtr(false), log, http.StatusServiceUnavailable)
+			},
+			wantLog: "failed to write response",
+		},
+		{
+			name:   "Jobs",
+			target: "/jobs",
+			newHandler: func(log *slog.Logger) http.Handler {
+				jc := &mockJobsChecker{states: []*jobsApi.State{{Pipeline: "pipe1", Driver: "memory"}}}
+				return NewJobsHandler(jc, newShutdownPtr(false), log, http.StatusServiceUnavailable)
+			},
+			wantLog: "failed to write jobs state report",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			capture := &logCapture{}
+			w := newFailingWriter()
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, tt.target, nil)
+
+			tt.newHandler(slog.New(capture)).ServeHTTP(w, req)
+
+			assert.Contains(t, capture.messages, tt.wantLog)
+		})
+	}
 }
 
 // --- Fuzz Tests ---
