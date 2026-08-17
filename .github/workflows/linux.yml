@@ -74,13 +74,13 @@ jobs:
       - name: Run unit tests with coverage
         run: |
           mkdir -p coverage-ci
-          go test -v -race -cover -coverpkg=./... -coverprofile=./coverage-ci/unit.out -covermode=atomic ./...
+          go test -v -race -cover -tags=debug -coverpkg=./... -coverprofile=./coverage-ci/unit.out -covermode=atomic ./...
 
       - name: Run status e2e tests with coverage
         run: |
           mkdir -p coverage-ci
           cd tests
-          go test -timeout 20m -v -race -cover -coverpkg=github.com/roadrunner-server/status/v6/... -coverprofile=../coverage-ci/e2e.out -covermode=atomic ./...
+          go test -timeout 20m -v -race -cover -tags=debug -coverpkg=github.com/roadrunner-server/status/v6/... -coverprofile=../coverage-ci/e2e.out -covermode=atomic ./...
 
       - name: Archive code coverage results
         uses: actions/upload-artifact@v7
