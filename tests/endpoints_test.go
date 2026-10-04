@@ -33,10 +33,8 @@ const (
 	readyInitRPC  = "127.0.0.1:6006"
 )
 
-// TestStatusEndpoints drives /health, /ready and /jobs against a container
-// running the http plugin. The rpc plugin is deliberately left out: the
-// ?plugin=http&plugin=rpc queries then prove that a name missing from the
-// registry is skipped instead of reported.
+// TestStatusEndpoints checks health, readiness, their aliases, and jobs.
+// The missing rpc plugin checks that unknown query names are skipped.
 func TestStatusEndpoints(t *testing.T) {
 	helpers.Start(t, statusInitCfg, []any{
 		&server.Plugin{},
@@ -48,45 +46,29 @@ func TestStatusEndpoints(t *testing.T) {
 	// what makes its status and readiness meaningful
 	helpers.WaitListener(t, "tcp", sharedHTTPAddr)
 
-	t.Run("HealthFiltered", func(t *testing.T) {
-		code, reports := helpers.GetReports(t, statusInitURL+"/health?plugin=http&plugin=rpc")
-		assert.Equal(t, http.StatusOK, code)
+	for _, tt := range []struct {
+		name string
+		path string
+	}{
+		{name: "HealthFiltered", path: "/health?plugin=http&plugin=rpc"},
+		{name: "HealthAll", path: "/health"},
+		{name: "LivezFiltered", path: "/livez?plugin=http&plugin=rpc"},
+		{name: "LivezAll", path: "/livez"},
+		{name: "ReadyFiltered", path: "/ready?plugin=http&plugin=rpc"},
+		{name: "ReadyAll", path: "/ready"},
+		{name: "ReadyzFiltered", path: "/readyz?plugin=http&plugin=rpc"},
+		{name: "ReadyzAll", path: "/readyz"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			code, reports := helpers.GetReports(t, statusInitURL+tt.path)
+			assert.Equal(t, http.StatusOK, code)
 
-		require.Len(t, reports, 1)
-		assert.Equal(t, "http", reports[0].PluginName)
-		assert.Empty(t, reports[0].ErrorMessage)
-		assert.Equal(t, http.StatusOK, reports[0].StatusCode)
-	})
-
-	t.Run("HealthAll", func(t *testing.T) {
-		code, reports := helpers.GetReports(t, statusInitURL+"/health")
-		assert.Equal(t, http.StatusOK, code)
-
-		require.Len(t, reports, 1)
-		assert.Equal(t, "http", reports[0].PluginName)
-		assert.Empty(t, reports[0].ErrorMessage)
-		assert.Equal(t, http.StatusOK, reports[0].StatusCode)
-	})
-
-	t.Run("ReadyFiltered", func(t *testing.T) {
-		code, reports := helpers.GetReports(t, statusInitURL+"/ready?plugin=http&plugin=rpc")
-		assert.Equal(t, http.StatusOK, code)
-
-		require.Len(t, reports, 1)
-		assert.Equal(t, "http", reports[0].PluginName)
-		assert.Empty(t, reports[0].ErrorMessage)
-		assert.Equal(t, http.StatusOK, reports[0].StatusCode)
-	})
-
-	t.Run("ReadyAll", func(t *testing.T) {
-		code, reports := helpers.GetReports(t, statusInitURL+"/ready")
-		assert.Equal(t, http.StatusOK, code)
-
-		require.Len(t, reports, 1)
-		assert.Equal(t, "http", reports[0].PluginName)
-		assert.Empty(t, reports[0].ErrorMessage)
-		assert.Equal(t, http.StatusOK, reports[0].StatusCode)
-	})
+			require.Len(t, reports, 1)
+			assert.Equal(t, "http", reports[0].PluginName)
+			assert.Empty(t, reports[0].ErrorMessage)
+			assert.Equal(t, http.StatusOK, reports[0].StatusCode)
+		})
+	}
 
 	t.Run("JobsWithoutJobsPlugin", func(t *testing.T) {
 		code, body := helpers.GetBody(t, statusInitURL+"/jobs")
@@ -116,13 +98,27 @@ func TestReadinessWorkerBusy(t *testing.T) {
 		return statusCode(t.Context(), readyURL) == http.StatusServiceUnavailable
 	}, time.Second*15, time.Millisecond*20, "the pool kept a ready worker")
 
-	code, reports := helpers.GetReports(t, readyURL)
-	assert.Equal(t, http.StatusServiceUnavailable, code)
+	for _, tt := range []struct {
+		name      string
+		path      string
+		wantError string
+		wantCode  int
+	}{
+		{name: "Health", path: "/health?plugin=http&plugin=rpc", wantCode: http.StatusOK},
+		{name: "Livez", path: "/livez?plugin=http&plugin=rpc", wantCode: http.StatusOK},
+		{name: "Ready", path: "/ready?plugin=http&plugin=rpc", wantCode: http.StatusServiceUnavailable, wantError: "internal server error, see logs"},
+		{name: "Readyz", path: "/readyz?plugin=http&plugin=rpc", wantCode: http.StatusServiceUnavailable, wantError: "internal server error, see logs"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			code, reports := helpers.GetReports(t, readyInitURL+tt.path)
+			assert.Equal(t, tt.wantCode, code)
 
-	require.Len(t, reports, 1)
-	assert.Equal(t, "http", reports[0].PluginName)
-	assert.Equal(t, "internal server error, see logs", reports[0].ErrorMessage)
-	assert.Equal(t, http.StatusServiceUnavailable, reports[0].StatusCode)
+			require.Len(t, reports, 1)
+			assert.Equal(t, "http", reports[0].PluginName)
+			assert.Equal(t, tt.wantError, reports[0].ErrorMessage)
+			assert.Equal(t, tt.wantCode, reports[0].StatusCode)
+		})
+	}
 
 	rsp := &statusV1.Response{}
 	require.NoError(t, helpers.RPC(t, readyInitRPC).Call("status.Ready", &statusV1.Request{Plugin: "http"}, rsp))

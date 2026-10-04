@@ -38,16 +38,21 @@ func TestShutdown503(t *testing.T) {
 	// returns once the container has been stopped
 	stop()
 
-	// liveness stays 200 so the orchestrator does not kill the draining process
-	code, body := helpers.GetBody(t, shutdownURL+"/health")
-	assert.Equal(t, http.StatusOK, code)
-	assert.Contains(t, body, "service is shutting down")
-
-	code, body = helpers.GetBody(t, shutdownURL+"/ready")
-	assert.Equal(t, http.StatusServiceUnavailable, code)
-	assert.Contains(t, body, "service is shutting down")
-
-	code, body = helpers.GetBody(t, shutdownURL+"/jobs")
-	assert.Equal(t, http.StatusServiceUnavailable, code)
-	assert.Contains(t, body, "service is shutting down")
+	for _, tt := range []struct {
+		name     string
+		path     string
+		wantCode int
+	}{
+		{name: "Health", path: "/health", wantCode: http.StatusOK},
+		{name: "Livez", path: "/livez", wantCode: http.StatusOK},
+		{name: "Ready", path: "/ready", wantCode: http.StatusServiceUnavailable},
+		{name: "Readyz", path: "/readyz", wantCode: http.StatusServiceUnavailable},
+		{name: "Jobs", path: "/jobs", wantCode: http.StatusServiceUnavailable},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			code, body := helpers.GetBody(t, shutdownURL+tt.path)
+			assert.Equal(t, tt.wantCode, code)
+			assert.Contains(t, body, "service is shutting down")
+		})
+	}
 }
