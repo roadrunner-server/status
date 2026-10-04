@@ -150,14 +150,10 @@ func (rd *Ready) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	data, err := json.Marshal(report)
-	if err != nil {
-		rd.log.Error("failed to marshal response", "error", err)
-		return
-	}
+	data, _ := json.Marshal(report)
 
 	// write the response
-	_, err = w.Write(data)
+	_, err := w.Write(data)
 	if err != nil {
 		rd.log.Error("failed to write response", "error", err)
 	}
