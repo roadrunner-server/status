@@ -93,85 +93,67 @@ func (rd *Ready) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				})
 			}
 		}
+	} else {
+		// iterate over all provided Plugins
+		for _, name := range plg {
+			svc, ok := rd.statusRegistry[name]
+			if !ok {
+				rd.log.Info("plugin does not support readiness checks", "plugin", name)
+				continue
+			}
 
-		data, err := json.Marshal(report)
-		if err != nil {
-			// TODO do we need to write this error to the ResponseWriter?
-			rd.log.Error("failed to marshal response", "error", err)
-			return
-		}
+			if svc == nil {
+				continue
+			}
 
-		// write the response
-		_, err = w.Write(data)
-		if err != nil {
-			rd.log.Error("failed to write response", "error", err)
-		}
+			st, err := svc.Ready()
+			if err != nil {
+				w.WriteHeader(rd.unavailableStatusCode)
+				report = append(report, &Report{
+					PluginName:   name,
+					ErrorMessage: err.Error(),
+					StatusCode:   http.StatusInternalServerError,
+				})
+				continue
+			}
 
-		return
-	}
+			if st == nil {
+				report = append(report, &Report{
+					PluginName:   name,
+					ErrorMessage: "plugin is not available",
+					StatusCode:   rd.unavailableStatusCode,
+				})
+				continue
+			}
 
-	// iterate over all provided Plugins
-	for _, name := range plg {
-		svc, ok := rd.statusRegistry[name]
-		if !ok {
-			rd.log.Info("plugin does not support readiness checks", "plugin", name)
-			continue
-		}
-
-		if svc == nil {
-			continue
-		}
-
-		st, err := svc.Ready()
-		if err != nil {
-			w.WriteHeader(rd.unavailableStatusCode)
-			report = append(report, &Report{
-				PluginName:   name,
-				ErrorMessage: err.Error(),
-				StatusCode:   http.StatusInternalServerError,
-			})
-			continue
-		}
-
-		if st == nil {
-			report = append(report, &Report{
-				PluginName:   name,
-				ErrorMessage: "plugin is not available",
-				StatusCode:   rd.unavailableStatusCode,
-			})
-			continue
-		}
-
-		switch {
-		case st.Code >= 500:
-			// on >=500, write header, because it'll be written on Write (200)
-			w.WriteHeader(rd.unavailableStatusCode)
-			report = append(report, &Report{
-				PluginName:   name,
-				ErrorMessage: "internal server error, see logs",
-				StatusCode:   rd.unavailableStatusCode,
-			})
-		case st.Code >= 100 && st.Code <= 400:
-			report = append(report, &Report{
-				PluginName: name,
-				StatusCode: st.Code,
-			})
-		default:
-			report = append(report, &Report{
-				PluginName:   name,
-				ErrorMessage: "unexpected status code",
-				StatusCode:   st.Code,
-			})
+			switch {
+			case st.Code >= 500:
+				// on >=500, write header, because it'll be written on Write (200)
+				w.WriteHeader(rd.unavailableStatusCode)
+				report = append(report, &Report{
+					PluginName:   name,
+					ErrorMessage: "internal server error, see logs",
+					StatusCode:   rd.unavailableStatusCode,
+				})
+			case st.Code >= 100 && st.Code <= 400:
+				report = append(report, &Report{
+					PluginName: name,
+					StatusCode: st.Code,
+				})
+			default:
+				report = append(report, &Report{
+					PluginName:   name,
+					ErrorMessage: "unexpected status code",
+					StatusCode:   st.Code,
+				})
+			}
 		}
 	}
 
-	data, err := json.Marshal(report)
-	if err != nil {
-		rd.log.Error("failed to marshal response", "error", err)
-	}
+	data, _ := json.Marshal(report)
 
 	// write the response
-	_, err = w.Write(data)
+	_, err := w.Write(data)
 	if err != nil {
 		rd.log.Error("failed to write response", "error", err)
 	}
