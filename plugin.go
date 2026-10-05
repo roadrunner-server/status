@@ -94,9 +94,14 @@ func (c *Plugin) Init(cfg Configurer, log Logger) error {
 func (c *Plugin) Serve() chan error {
 	errCh := make(chan error, 1)
 
+	healthHandler := NewHealthHandler(c.statusRegistry, &c.shutdownInitiated, c.log, c.cfg.UnavailableStatusCode)
+	readyHandler := NewReadyHandler(c.readyRegistry, &c.shutdownInitiated, c.log, c.cfg.UnavailableStatusCode)
+
 	mux := http.NewServeMux()
-	mux.Handle("/health", NewHealthHandler(c.statusRegistry, &c.shutdownInitiated, c.log, c.cfg.UnavailableStatusCode))
-	mux.Handle("/ready", NewReadyHandler(c.readyRegistry, &c.shutdownInitiated, c.log, c.cfg.UnavailableStatusCode))
+	mux.Handle("/health", healthHandler)
+	mux.Handle("/livez", healthHandler)
+	mux.Handle("/ready", readyHandler)
+	mux.Handle("/readyz", readyHandler)
 	mux.Handle("/jobs", NewJobsHandler(c.statusJobsRegistry, &c.shutdownInitiated, c.log, c.cfg.UnavailableStatusCode))
 
 	c.mu.Lock()
