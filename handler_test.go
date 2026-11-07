@@ -2,7 +2,7 @@ package status
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -99,6 +99,61 @@ func parseJobsReports(t *testing.T, body []byte) []*JobsReport {
 	var reports []*JobsReport
 	require.NoError(t, json.Unmarshal(body, &reports))
 	return reports
+}
+
+func TestReportJSON(t *testing.T) {
+	log := slog.New(slog.DiscardHandler)
+	tests := []struct {
+		name      string
+		handler   http.Handler
+		wantError string
+	}{
+		{
+			name:      "health error text",
+			handler:   NewHealthHandler(map[string]Checker{"http": &mockChecker{err: errors.New("<failure>")}}, nil, log, http.StatusServiceUnavailable),
+			wantError: "<failure>",
+		},
+		{
+			name:      "health invalid error text",
+			handler:   NewHealthHandler(map[string]Checker{"http": &mockChecker{err: errors.New("\xff")}}, nil, log, http.StatusServiceUnavailable),
+			wantError: "\ufffd",
+		},
+		{
+			name:      "ready error text",
+			handler:   NewReadyHandler(map[string]Readiness{"http": &mockReadiness{err: errors.New("<failure>")}}, nil, log, http.StatusServiceUnavailable),
+			wantError: "<failure>",
+		},
+		{
+			name:      "ready invalid error text",
+			handler:   NewReadyHandler(map[string]Readiness{"http": &mockReadiness{err: errors.New("\xff")}}, nil, log, http.StatusServiceUnavailable),
+			wantError: "\ufffd",
+		},
+		{
+			name:      "jobs error text",
+			handler:   NewJobsHandler(&mockJobsChecker{states: []*jobsApi.State{{ErrorMessage: "<failure>"}}}, nil, log, http.StatusServiceUnavailable),
+			wantError: "<failure>",
+		},
+		{
+			name:      "jobs invalid error text",
+			handler:   NewJobsHandler(&mockJobsChecker{states: []*jobsApi.State{{ErrorMessage: "\xff"}}}, nil, log, http.StatusServiceUnavailable),
+			wantError: "\ufffd",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			tt.handler.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil))
+
+			var reports []struct {
+				ErrorMessage string `json:"error_message"`
+			}
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &reports))
+			require.Len(t, reports, 1)
+			require.Equal(t, tt.wantError, reports[0].ErrorMessage)
+			require.NotContains(t, rec.Body.String(), `\u003c`)
+		})
+	}
 }
 
 // --- Health Handler Tests ---
