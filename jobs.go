@@ -1,7 +1,8 @@
 package status
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"log/slog"
 	"net/http"
 	"sync/atomic"
@@ -58,7 +59,7 @@ func (jb *Jobs) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	data, err := json.Marshal(report)
+	data, err := json.Marshal(report, jsontext.AllowInvalidUTF8(true))
 	if err != nil {
 		jb.log.Error("failed to marshal jobs state report", "error", err)
 		return

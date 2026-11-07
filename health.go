@@ -1,7 +1,8 @@
 package status
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"log/slog"
 	"net/http"
 	"sync/atomic"
@@ -152,7 +153,7 @@ func (rd *Health) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	data, _ := json.Marshal(report)
+	data, _ := json.Marshal(report, jsontext.AllowInvalidUTF8(true))
 
 	// write the response
 	_, err := w.Write(data)
