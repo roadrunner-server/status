@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"net/http"
 	"sync/atomic"
+
+	apiStatus "github.com/roadrunner-server/api-plugins/v6/status"
 )
 
 type Health struct {
@@ -33,70 +35,31 @@ func (rd *Health) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// report will be used either for all plugins or for the Plugins in the query
 	report := make([]*Report, 0, len(rd.statusRegistry))
+	unavailable := false
 
 	plg := r.URL.Query()[pluginsQuery]
-	// if no Plugins provided, check them all
 	if len(plg) == 0 {
 		rd.log.Debug("no plugins provided, checking all plugins")
 
 		for k, pl := range rd.statusRegistry {
 			if pl == nil {
+				unavailable = true
 				report = append(report, &Report{
 					PluginName:   k,
 					ErrorMessage: "plugin is nil or not initialized",
 					StatusCode:   http.StatusNotFound,
 				})
-
 				rd.log.Info("plugin is nil or not initialized", "plugin", k)
 				continue
 			}
 
 			st, err := pl.Status()
-			if err != nil {
-				w.WriteHeader(rd.unavailableStatusCode)
-				report = append(report, &Report{
-					PluginName:   k,
-					ErrorMessage: err.Error(),
-					StatusCode:   rd.unavailableStatusCode,
-				})
-				continue
-			}
-
-			if st == nil {
-				report = append(report, &Report{
-					PluginName:   k,
-					ErrorMessage: "plugin is not available, returned nil",
-					StatusCode:   rd.unavailableStatusCode,
-				})
-				continue
-			}
-
-			switch {
-			case st.Code >= 500:
-				w.WriteHeader(rd.unavailableStatusCode)
-
-				report = append(report, &Report{
-					PluginName:   k,
-					ErrorMessage: "internal server error, see logs",
-					StatusCode:   rd.unavailableStatusCode,
-				})
-			case st.Code >= 100 && st.Code <= 400:
-				report = append(report, &Report{
-					PluginName: k,
-					StatusCode: st.Code,
-				})
-			default:
-				report = append(report, &Report{
-					PluginName:   k,
-					ErrorMessage: "unexpected status code",
-					StatusCode:   st.Code,
-				})
-			}
+			rep, failed := evaluatePlugin(k, st, err, rd.unavailableStatusCode)
+			unavailable = unavailable || failed
+			report = append(report, rep)
 		}
 	} else {
-		// iterate over all provided Plugins
 		for _, name := range plg {
 			svc, ok := rd.statusRegistry[name]
 			if !ok {
@@ -105,59 +68,75 @@ func (rd *Health) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 
 			if svc == nil {
+				unavailable = true
+				report = append(report, &Report{
+					PluginName:   name,
+					ErrorMessage: "plugin is nil or not initialized",
+					StatusCode:   http.StatusNotFound,
+				})
+				rd.log.Info("plugin is nil or not initialized", "plugin", name)
 				continue
 			}
 
 			st, err := svc.Status()
-			if err != nil {
-				report = append(report, &Report{
-					PluginName:   name,
-					ErrorMessage: err.Error(),
-					StatusCode:   http.StatusInternalServerError,
-				})
+			rep, failed := evaluatePlugin(name, st, err, rd.unavailableStatusCode)
+			unavailable = unavailable || failed
+			report = append(report, rep)
+		}
 
-				continue
-			}
-
-			if st == nil {
-				report = append(report, &Report{
-					PluginName:   name,
-					ErrorMessage: "plugin is not available",
-					StatusCode:   rd.unavailableStatusCode,
-				})
-
-				continue
-			}
-
-			switch {
-			case st.Code >= 500:
-				// on >=500, write header, because it'll be written on Write (200)
-				w.WriteHeader(rd.unavailableStatusCode)
-				report = append(report, &Report{
-					PluginName:   name,
-					ErrorMessage: "internal server error, see logs",
-					StatusCode:   rd.unavailableStatusCode,
-				})
-			case st.Code >= 100 && st.Code <= 400:
-				report = append(report, &Report{
-					PluginName: name,
-					StatusCode: st.Code,
-				})
-			default:
-				report = append(report, &Report{
-					PluginName:   name,
-					ErrorMessage: "unexpected status code",
-					StatusCode:   st.Code,
-				})
-			}
+		if len(report) == 0 {
+			unavailable = true
 		}
 	}
 
-	data, _ := json.Marshal(report, jsontext.AllowInvalidUTF8(true))
+	writeReport(w, rd.log, report, unavailable, rd.unavailableStatusCode)
+}
 
-	// write the response
-	_, err := w.Write(data)
+func evaluatePlugin(name string, st *apiStatus.Status, err error, unavailableCode int) (*Report, bool) {
 	if err != nil {
-		rd.log.Error("failed to write response", "error", err)
+		return &Report{
+			PluginName:   name,
+			ErrorMessage: err.Error(),
+			StatusCode:   unavailableCode,
+		}, true
+	}
+
+	if st == nil {
+		return &Report{
+			PluginName:   name,
+			ErrorMessage: "plugin is not available",
+			StatusCode:   unavailableCode,
+		}, true
+	}
+
+	switch {
+	case st.Code >= 500:
+		return &Report{
+			PluginName:   name,
+			ErrorMessage: "internal server error, see logs",
+			StatusCode:   unavailableCode,
+		}, true
+	case st.Code >= 100 && st.Code <= 400:
+		return &Report{
+			PluginName: name,
+			StatusCode: st.Code,
+		}, false
+	default:
+		return &Report{
+			PluginName:   name,
+			ErrorMessage: "unexpected status code",
+			StatusCode:   st.Code,
+		}, false
+	}
+}
+
+func writeReport(w http.ResponseWriter, log *slog.Logger, report []*Report, unavailable bool, unavailableCode int) {
+	if unavailable {
+		w.WriteHeader(unavailableCode)
+	}
+
+	data, _ := json.Marshal(report, jsontext.AllowInvalidUTF8(true))
+	if _, err := w.Write(data); err != nil { //nolint:gosec // JSON-encoded status report
+		log.Error("failed to write response", "error", err)
 	}
 }

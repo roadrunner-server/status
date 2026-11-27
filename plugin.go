@@ -47,9 +47,7 @@ type JobsChecker interface {
 	Name() string
 }
 
-// Readiness interface used to get readiness status from the plugin
-// that means that a worker pool inside the plugin has 1+ plugins which are ready to work
-// at the particular moment
+// Readiness returns the readiness status of a plugin.
 type Readiness interface {
 	Ready() (*status.Status, error)
 	Name() string

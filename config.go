@@ -6,7 +6,7 @@ import "net/http"
 type Config struct {
 	// Address of the http server
 	Address string
-	// Time to wait for a health check response.
+	// HTTP request and header read timeout for the status server, in seconds.
 	CheckTimeout int `mapstructure:"check_timeout"`
 	// Status code returned in case of fail, 503 by default
 	UnavailableStatusCode int `mapstructure:"unavailable_status_code"`

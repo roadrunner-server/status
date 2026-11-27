@@ -25,7 +25,7 @@
       "default": 503
     },
     "check_timeout": {
-      "description": "The maximum duration to wait for a complete response from the queried plugin(s), in seconds. Defaults to 60.",
+      "description": "HTTP request and header read timeout for the status server, in seconds. Defaults to 60.",
       "type": "integer",
       "minimum": 1,
       "default": 60
