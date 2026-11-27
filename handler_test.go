@@ -228,7 +228,7 @@ func TestHealthHandler(t *testing.T) {
 		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/health", nil)
 		h.ServeHTTP(rec, req)
 
-		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
 		reports := parseReports(t, rec.Body.Bytes())
 		require.Len(t, reports, 1)
 		assert.Contains(t, reports[0].ErrorMessage, "plugin is not available")
@@ -244,7 +244,7 @@ func TestHealthHandler(t *testing.T) {
 		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/health", nil)
 		h.ServeHTTP(rec, req)
 
-		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
 		reports := parseReports(t, rec.Body.Bytes())
 		require.Len(t, reports, 1)
 		assert.Equal(t, "plugin is nil or not initialized", reports[0].ErrorMessage)
@@ -310,7 +310,7 @@ func TestHealthHandler(t *testing.T) {
 		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/health?plugin=nonexistent", nil)
 		h.ServeHTTP(rec, req)
 
-		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
 		reports := parseReports(t, rec.Body.Bytes())
 		assert.Empty(t, reports)
 	})
@@ -324,10 +324,11 @@ func TestHealthHandler(t *testing.T) {
 		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/health?plugin=http", nil)
 		h.ServeHTTP(rec, req)
 
-		// Filtered path skips a nil plugin, while the all-plugins path reports it
-		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
 		reports := parseReports(t, rec.Body.Bytes())
-		assert.Empty(t, reports)
+		require.Len(t, reports, 1)
+		assert.Equal(t, "plugin is nil or not initialized", reports[0].ErrorMessage)
+		assert.Equal(t, http.StatusNotFound, reports[0].StatusCode)
 	})
 
 	t.Run("Filtered_Error", func(t *testing.T) {
@@ -339,12 +340,11 @@ func TestHealthHandler(t *testing.T) {
 		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/health?plugin=http", nil)
 		h.ServeHTTP(rec, req)
 
-		// Filtered path does NOT call WriteHeader on error (differs from all-plugins path)
-		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
 		reports := parseReports(t, rec.Body.Bytes())
 		require.Len(t, reports, 1)
 		assert.Equal(t, "connection refused", reports[0].ErrorMessage)
-		assert.Equal(t, http.StatusInternalServerError, reports[0].StatusCode)
+		assert.Equal(t, http.StatusServiceUnavailable, reports[0].StatusCode)
 	})
 
 	t.Run("Filtered_NilStatus", func(t *testing.T) {
@@ -356,7 +356,7 @@ func TestHealthHandler(t *testing.T) {
 		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/health?plugin=http", nil)
 		h.ServeHTTP(rec, req)
 
-		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
 		reports := parseReports(t, rec.Body.Bytes())
 		require.Len(t, reports, 1)
 		assert.Equal(t, "plugin is not available", reports[0].ErrorMessage)
@@ -468,12 +468,11 @@ func TestReadyHandler(t *testing.T) {
 		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/ready", nil)
 		h.ServeHTTP(rec, req)
 
-		// All-plugins path does NOT call WriteHeader on error (opposite of health)
-		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
 		reports := parseReports(t, rec.Body.Bytes())
 		require.Len(t, reports, 1)
 		assert.Equal(t, "not ready", reports[0].ErrorMessage)
-		assert.Equal(t, http.StatusInternalServerError, reports[0].StatusCode)
+		assert.Equal(t, http.StatusServiceUnavailable, reports[0].StatusCode)
 	})
 
 	t.Run("NilStatus", func(t *testing.T) {
@@ -485,7 +484,7 @@ func TestReadyHandler(t *testing.T) {
 		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/ready", nil)
 		h.ServeHTTP(rec, req)
 
-		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
 		reports := parseReports(t, rec.Body.Bytes())
 		require.Len(t, reports, 1)
 		assert.Equal(t, "plugin is not available", reports[0].ErrorMessage)
@@ -501,7 +500,7 @@ func TestReadyHandler(t *testing.T) {
 		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/ready", nil)
 		h.ServeHTTP(rec, req)
 
-		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
 		reports := parseReports(t, rec.Body.Bytes())
 		require.Len(t, reports, 1)
 		assert.Equal(t, "plugin is nil or not initialized", reports[0].ErrorMessage)
@@ -567,7 +566,7 @@ func TestReadyHandler(t *testing.T) {
 		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/ready?plugin=nonexistent", nil)
 		h.ServeHTTP(rec, req)
 
-		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
 		reports := parseReports(t, rec.Body.Bytes())
 		assert.Empty(t, reports)
 	})
@@ -581,10 +580,11 @@ func TestReadyHandler(t *testing.T) {
 		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/ready?plugin=http", nil)
 		h.ServeHTTP(rec, req)
 
-		// Filtered path skips a nil plugin, while the all-plugins path reports it
-		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
 		reports := parseReports(t, rec.Body.Bytes())
-		assert.Empty(t, reports)
+		require.Len(t, reports, 1)
+		assert.Equal(t, "plugin is nil or not initialized", reports[0].ErrorMessage)
+		assert.Equal(t, http.StatusNotFound, reports[0].StatusCode)
 	})
 
 	t.Run("Filtered_Error", func(t *testing.T) {
@@ -596,12 +596,11 @@ func TestReadyHandler(t *testing.T) {
 		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/ready?plugin=http", nil)
 		h.ServeHTTP(rec, req)
 
-		// Filtered path DOES call WriteHeader on error (opposite of health filtered path)
 		assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
 		reports := parseReports(t, rec.Body.Bytes())
 		require.Len(t, reports, 1)
 		assert.Equal(t, "not ready", reports[0].ErrorMessage)
-		assert.Equal(t, http.StatusInternalServerError, reports[0].StatusCode)
+		assert.Equal(t, http.StatusServiceUnavailable, reports[0].StatusCode)
 	})
 
 	t.Run("Filtered_NilStatus", func(t *testing.T) {
@@ -613,7 +612,7 @@ func TestReadyHandler(t *testing.T) {
 		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/ready?plugin=http", nil)
 		h.ServeHTTP(rec, req)
 
-		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
 		reports := parseReports(t, rec.Body.Bytes())
 		require.Len(t, reports, 1)
 		assert.Equal(t, "plugin is not available", reports[0].ErrorMessage)
@@ -868,4 +867,111 @@ func FuzzReadyPluginQuery(f *testing.F) {
 			t.Errorf("unexpected HTTP status code: %d", rec.Code)
 		}
 	})
+}
+
+type headerCountWriter struct {
+	*httptest.ResponseRecorder
+	writeHeaderCalls int
+}
+
+func (w *headerCountWriter) WriteHeader(code int) {
+	w.writeHeaderCalls++
+	w.ResponseRecorder.WriteHeader(code)
+}
+
+func TestMultipleFailingPluginsWriteHeaderOnce(t *testing.T) {
+	log := slog.New(slog.DiscardHandler)
+
+	healthRegistry := map[string]Checker{
+		"http": &mockChecker{name: "http", st: &apiStatus.Status{Code: http.StatusServiceUnavailable}},
+		"grpc": &mockChecker{name: "grpc", err: errors.New("down")},
+	}
+	readyRegistry := map[string]Readiness{
+		"http": &mockReadiness{name: "http", st: &apiStatus.Status{Code: http.StatusServiceUnavailable}},
+		"grpc": &mockReadiness{name: "grpc", err: errors.New("down")},
+	}
+
+	tests := []struct {
+		name    string
+		handler http.Handler
+		target  string
+	}{
+		{
+			name:    "health unfiltered multiple failures",
+			handler: NewHealthHandler(healthRegistry, newShutdownPtr(false), log, http.StatusServiceUnavailable),
+			target:  "/health",
+		},
+		{
+			name:    "health filtered multiple failures",
+			handler: NewHealthHandler(healthRegistry, newShutdownPtr(false), log, http.StatusServiceUnavailable),
+			target:  "/health?plugin=http&plugin=grpc",
+		},
+		{
+			name:    "ready unfiltered multiple failures",
+			handler: NewReadyHandler(readyRegistry, newShutdownPtr(false), log, http.StatusServiceUnavailable),
+			target:  "/ready",
+		},
+		{
+			name:    "ready filtered multiple failures",
+			handler: NewReadyHandler(readyRegistry, newShutdownPtr(false), log, http.StatusServiceUnavailable),
+			target:  "/ready?plugin=http&plugin=grpc",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			hw := &headerCountWriter{ResponseRecorder: rec}
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, tt.target, nil)
+
+			tt.handler.ServeHTTP(hw, req)
+
+			assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+			assert.Equal(t, 1, hw.writeHeaderCalls)
+			reports := parseReports(t, rec.Body.Bytes())
+			require.Len(t, reports, 2)
+		})
+	}
+}
+
+func TestFilteredMixedKnownAndUnknown(t *testing.T) {
+	log := slog.New(slog.DiscardHandler)
+
+	healthRegistry := map[string]Checker{
+		"http": &mockChecker{name: "http", st: &apiStatus.Status{Code: http.StatusOK}},
+	}
+	readyRegistry := map[string]Readiness{
+		"http": &mockReadiness{name: "http", st: &apiStatus.Status{Code: http.StatusOK}},
+	}
+
+	tests := []struct {
+		name    string
+		handler http.Handler
+		target  string
+	}{
+		{
+			name:    "health mixed plugins",
+			handler: NewHealthHandler(healthRegistry, newShutdownPtr(false), log, http.StatusServiceUnavailable),
+			target:  "/health?plugin=http&plugin=unknown",
+		},
+		{
+			name:    "ready mixed plugins",
+			handler: NewReadyHandler(readyRegistry, newShutdownPtr(false), log, http.StatusServiceUnavailable),
+			target:  "/ready?plugin=http&plugin=unknown",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, tt.target, nil)
+
+			tt.handler.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusOK, rec.Code)
+			reports := parseReports(t, rec.Body.Bytes())
+			require.Len(t, reports, 1)
+			assert.Equal(t, "http", reports[0].PluginName)
+		})
+	}
 }
